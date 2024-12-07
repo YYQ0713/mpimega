@@ -81,7 +81,7 @@ class EdgeWriter {
       snapshot->bucket_info.file_offset = n_edges_at_thread_[tid];
     }
     assert(snapshot->bucket_id == bucket);
-    assert(snapshot->bucket_info.file_id == tid);
+    assert(snapshot->bucket_info.file_id == mpienv.rank * n_threads + tid);
 
     files_[tid]->write(reinterpret_cast<const char *>(edge_ptr),
                        sizeof(uint32_t) * metadata_.words_per_edge);

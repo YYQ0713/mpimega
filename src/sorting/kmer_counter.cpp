@@ -83,6 +83,7 @@ KmerCounter::MemoryStat KmerCounter::Initialize() {
   xinfo("{} words per substring, {} words per edge\n", words_per_substr_,
         words_per_edge_);
 
+  //TODO:需要实现原地reduce，专门创建一段内存用来reduce有点太浪费内存了，后面需要优化
   // --- malloc read first_in / last_out ---
   first_0_out_ =
       std::vector<AtomicWrapper<uint32_t>>(seq_pkg_.seq_count(), 0xFFFFFFFFU);

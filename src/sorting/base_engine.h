@@ -48,10 +48,13 @@ class BaseSequenceSortingEngine {
    */
  private:
   unsigned lv1_start_bucket_{}, lv1_end_bucket_{};
+  unsigned lv1_start_bucket_local_{}, lv1_end_bucket_local_{};
   int64_t lv1_num_items_{};
   std::vector<bool> cur_lv1_buckets_;
   std::vector<int64_t> lv1_special_offsets_;
   std::vector<uint32_t> lv1_offsets_;
+  std::vector<uint32_t> lv1_start_bucket_vec;
+  std::vector<uint32_t> lv1_end_bucket_vec;
   std::mutex special_item_lock_;
 
  private:

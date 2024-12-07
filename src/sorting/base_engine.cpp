@@ -63,6 +63,32 @@ void BaseSequenceSortingEngine::AdjustMemory() {
     }
   }
 
+  if (mpienv_.rank == 0)
+  {
+    lv1_start_bucket_vec = std::vector<uint32_t>(mpienv_.nprocs, 0);
+    lv1_end_bucket_vec = std::vector<uint32_t>(mpienv_.nprocs, 0);
+    int target_per_process = total_bucket_size / mpienv_.nprocs;
+
+    int current_process = 0;
+    int current_sum = 0;
+    int start_bucket = 0;
+    
+    for (int i = 0; i < kNumBuckets; ++i) {
+      current_sum += bucket_sizes_[i];
+      
+      if (current_sum >= target_per_process && current_process < mpienv_.nprocs - 1) {
+        lv1_start_bucket_vec[current_process] = start_bucket;
+        lv1_end_bucket_vec[current_process] = i;
+        current_process++;
+        start_bucket = i;
+        current_sum = 0;
+      }
+    }
+
+    lv1_start_bucket_vec[current_process] = start_bucket;
+    lv1_end_bucket_vec[current_process] = kNumBuckets;
+  }
+
   int64_t est_lv2_items =
       std::max(3 * total_bucket_size / std::max(1, num_non_empty) * n_threads_,
                max_bucket_size);
@@ -174,47 +200,58 @@ void BaseSequenceSortingEngine::Run() {
 
   lv0_timer.reset();
   lv0_timer.start();
-  xinfo("Start main loop...\n");
-  int lv1_iteration = 0;
-  lv1_start_bucket_ = 0;
 
   // prepare mpi rma info
-  int disp_unit;
-  int *iter_info;
-  MPI_Aint iter_info_size;
-  MPI_Win win;
+  //int disp_unit;
+  //int *iter_info;
+  //MPI_Aint iter_info_size;
+  //MPI_Win win;
 
-  MPI_Win_allocate(sizeof(int), sizeof(int), MPI_INFO_NULL, MPI_COMM_WORLD, &iter_info, &win);
+  //MPI_Win_allocate(sizeof(int), sizeof(int), MPI_INFO_NULL, MPI_COMM_WORLD, &iter_info, &win);
 
-  if (mpienv_.rank == 0){
-    iter_info[0] = 0;
-  }
+  //if (mpienv_.rank == 0){
+  //  iter_info[0] = 0;
+  //}
 
-  MPI_Barrier(MPI_COMM_WORLD);
+  //MPI_Barrier(MPI_COMM_WORLD);
   
   //MPI_Win_lock(MPI_LOCK_EXCLUSIVE, 0, 0, win);
   //MPI_Win_unlock(0, win);
+  
+  MPI_Scatter(lv1_start_bucket_vec.data(), mpienv_.nprocs, MPI_INT, &lv1_start_bucket_local_, 1, MPI_INT, 0, MPI_COMM_WORLD);
+  MPI_Scatter(lv1_end_bucket_vec.data(), mpienv_.nprocs, MPI_INT, &lv1_end_bucket_local_, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
-  while (lv1_start_bucket_ < kNumBuckets) {
+  lv1_start_bucket_ = lv1_start_bucket_local_;
+
+  xinfo("Start main loop...\n");
+  int lv1_iteration = 0;
+  while (lv1_start_bucket_ < lv1_end_bucket_local_) {
     SimpleTimer lv1_timer;
 
-    {
+    //{
       // --- finds the bucket range for this iteration ---
-      MPI_Win_lock(MPI_LOCK_EXCLUSIVE, 0, 0, win);
-      MPI_Get(&lv1_start_bucket_, 1, MPI_INT, 0, 0, 1, MPI_INT, win);
-      MPI_Win_flush(0, win);
-      if (lv1_start_bucket_ == kNumBuckets)
-      {
-        MPI_Win_unlock(0, win);
-        break;
-      }
+      //MPI_Win_lock(MPI_LOCK_EXCLUSIVE, 0, 0, win);
+      //MPI_Get(&lv1_start_bucket_, 1, MPI_INT, 0, 0, 1, MPI_INT, win);
+      //MPI_Win_flush(0, win);
+      //if (lv1_start_bucket_ == kNumBuckets)
+      //{
+      //  MPI_Win_unlock(0, win);
+      //  break;
+      //}
       
-      lv1_end_bucket_ = Lv1FindEndBuckets(lv1_start_bucket_);
-      assert(lv1_start_bucket_ < lv1_end_bucket_);
-      MPI_Put(&lv1_end_bucket_, 1, MPI_INT, 0, 0, 1, MPI_INT, win);
-      MPI_Win_flush(0, win);
-      MPI_Win_unlock(0, win);
+      //lv1_end_bucket_ = Lv1FindEndBuckets(lv1_start_bucket_);
+      //assert(lv1_start_bucket_ < lv1_end_bucket_);
+      //MPI_Put(&lv1_end_bucket_, 1, MPI_INT, 0, 0, 1, MPI_INT, win);
+      //MPI_Win_flush(0, win);
+      //MPI_Win_unlock(0, win);
+    //}
+
+    lv1_end_bucket_ = Lv1FindEndBuckets(lv1_start_bucket_);
+    if (lv1_end_bucket_ > lv1_end_bucket_local_)
+    {
+      lv1_end_bucket_ = lv1_end_bucket_local_;
     }
+    assert(lv1_start_bucket_ < lv1_end_bucket_);
 
     lv1_iteration++;
     xinfo("Lv1 scanning from bucket {} to {} of rank:{}\n", lv1_start_bucket_,
@@ -235,9 +272,10 @@ void BaseSequenceSortingEngine::Run() {
     lv1_timer.stop();
     xinfo("Lv1 fetching & sorting done. Time elapsed: {.4}\n",
           lv1_timer.elapsed());
+    lv1_start_bucket_ = lv1_end_bucket_;
   }
 
-  MPI_Win_free(&win);
+  //MPI_Win_free(&win);
   lv0_timer.stop();
   xinfo("Main loop done. Time elapsed: {.4}\n", lv0_timer.elapsed());
   lv0_timer.reset();
