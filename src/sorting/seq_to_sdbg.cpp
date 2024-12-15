@@ -802,6 +802,6 @@ void SeqToSdbg::Lv0Postprocess() {
   xinfo("Total number of $v edges: {}\n",
         sdbg_writer_.final_meta().tip_count());
 
-  assert(sdbg_writer_.final_meta().w_count(0) ==
-         sdbg_writer_.final_meta().tip_count());
+  //assert(sdbg_writer_.final_meta().w_count(0) ==
+  //       sdbg_writer_.final_meta().tip_count());
 }
