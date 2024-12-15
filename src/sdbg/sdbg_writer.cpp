@@ -9,6 +9,19 @@
 #include <cassert>
 #include "sdbg_item.h"
 
+void SdbgWriter::InitFiles(MPIEnviroment& mpienv) {
+  cur_thread_offset_.resize(num_threads_, 0);
+  bucket_rec_.resize(num_buckets_);
+
+  for (size_t i = 0; i < num_threads_; ++i) {
+    files_.emplace_back(
+        new std::ofstream((file_prefix_ + ".rank." + std::to_string(mpienv.rank) + ".sdbg." + std::to_string(i)).c_str(),
+                          std::ofstream::binary | std::ofstream::out));
+    assert(files_[i]->is_open());
+  }
+  is_opened_ = true;
+}
+
 void SdbgWriter::InitFiles() {
   cur_thread_offset_.resize(num_threads_, 0);
   bucket_rec_.resize(num_buckets_);

@@ -65,22 +65,22 @@ void BaseSequenceSortingEngine::AdjustMemory() {
 
   if (mpienv_.rank == 0)
   {
-    lv1_start_bucket_vec = std::vector<uint32_t>(mpienv_.nprocs, 0);
-    lv1_end_bucket_vec = std::vector<uint32_t>(mpienv_.nprocs, 0);
-    int target_per_process = total_bucket_size / mpienv_.nprocs;
+    lv1_start_bucket_vec = std::vector<uint32_t>(mpienv_.nprocs, 0x00000000U);
+    lv1_end_bucket_vec = std::vector<uint32_t>(mpienv_.nprocs, 0x00000000U);
+    int64_t target_per_process = total_bucket_size / mpienv_.nprocs;
 
-    int current_process = 0;
-    int current_sum = 0;
-    int start_bucket = 0;
+    int64_t current_sum = 0;
+    uint32_t current_process = 0;
+    uint32_t start_bucket = 0;
     
-    for (int i = 0; i < kNumBuckets; ++i) {
+    for (uint32_t i = 0; i < kNumBuckets; ++i) {
       current_sum += bucket_sizes_[i];
       
       if (current_sum >= target_per_process && current_process < mpienv_.nprocs - 1) {
         lv1_start_bucket_vec[current_process] = start_bucket;
-        lv1_end_bucket_vec[current_process] = i;
+        lv1_end_bucket_vec[current_process] = i + 1;
         current_process++;
-        start_bucket = i;
+        start_bucket = i + 1;
         current_sum = 0;
       }
     }
@@ -218,11 +218,12 @@ void BaseSequenceSortingEngine::Run() {
   //MPI_Win_lock(MPI_LOCK_EXCLUSIVE, 0, 0, win);
   //MPI_Win_unlock(0, win);
   
-  MPI_Scatter(lv1_start_bucket_vec.data(), mpienv_.nprocs, MPI_INT, &lv1_start_bucket_local_, 1, MPI_INT, 0, MPI_COMM_WORLD);
-  MPI_Scatter(lv1_end_bucket_vec.data(), mpienv_.nprocs, MPI_INT, &lv1_end_bucket_local_, 1, MPI_INT, 0, MPI_COMM_WORLD);
+  MPI_Scatter(lv1_start_bucket_vec.data(), 1, MPI_INT, &lv1_start_bucket_local_, 1, MPI_INT, 0, MPI_COMM_WORLD);
+  MPI_Scatter(lv1_end_bucket_vec.data(), 1, MPI_INT, &lv1_end_bucket_local_, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
   lv1_start_bucket_ = lv1_start_bucket_local_;
-
+  
+  MPI_Barrier(MPI_COMM_WORLD);
   xinfo("Start main loop...\n");
   int lv1_iteration = 0;
   while (lv1_start_bucket_ < lv1_end_bucket_local_) {
@@ -379,18 +380,14 @@ void BaseSequenceSortingEngine::Lv0CalcBucketSizeLaunchMt() {
   SimpleTimer lv1_timer;
   lv1_timer.reset();
   lv1_timer.start();
-  xinfo("calc b before for...\n");
 #pragma omp parallel for
   for (unsigned t = 0; t < n_threads_; ++t) {
-    xinfo("calc b before for... of {}\n", omp_get_thread_num());
     auto &thread_meta = thread_meta_[t];
     Lv0CalcBucketSize(thread_meta.seq_from, thread_meta.seq_to,
                       &thread_meta.bucket_sizes);
   }
   lv1_timer.stop();
-  xinfo("calc b after for...Time elapsed: {.4}\n",lv1_timer.elapsed());
   std::fill(bucket_sizes_.begin(), bucket_sizes_.end(), 0);
-  xinfo("calc b after fill...\n");
   for (unsigned t = 0; t < n_threads_; ++t) {
     for (unsigned b = 0; b < kNumBuckets; ++b) {
       bucket_sizes_[b] += thread_meta_[t].bucket_sizes[b];

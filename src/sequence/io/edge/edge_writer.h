@@ -62,7 +62,7 @@ class EdgeWriter {
 
     for (unsigned i = 0; i < metadata_.num_files; ++i) {
       files_.emplace_back(new std::ofstream(
-          (file_prefix_ + ".edges." + "rank." + std::to_string(mpienv.rank) + ".threads." + std::to_string(i)).c_str(),
+          (file_prefix_ + ".rank." + std::to_string(mpienv.rank) + ".edges." + std::to_string(i)).c_str(),
           std::ofstream::binary | std::ofstream::out));
     }
 

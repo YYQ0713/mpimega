@@ -789,7 +789,7 @@ def build_first_graph_1pass(option):
 @check_point
 def count_mink(option):
     cmd = [opt.megahit_core, 'count'] + option
-    cmd = ['mpirun', '-n', str(opt.num_processes), '--map-by', 'socket', '--bind-to', 'socket'] + cmd
+    cmd = ['mpiexec', '-n', str(opt.num_processes), '--map-by', 'socket', '--bind-to', 'socket'] + cmd
     run_sub_command(cmd, 'Extract solid (k+1)-mers for k = %d ' % opt.k_min)
 
 
@@ -804,7 +804,7 @@ def build_first_graph():
     print(common_option)
     if not opt.kmin_1pass:
         count_mink(common_option)
-        #build_graph(opt.k_min, 0)
+        build_graph(opt.k_min, 0)
     else:
         build_first_graph_1pass(common_option)
 
@@ -819,16 +819,16 @@ def build_graph(kmer_k, kmer_from):
                       '--kmer_from', str(kmer_from)]
 
     build_cmd = [opt.megahit_core, 'seq2sdbg'] + build_comm_opt
+    build_cmd = ['mpiexec', '-n', str(opt.num_processes), '--map-by', 'socket', '--bind-to', 'socket'] + build_cmd 
 
     file_size = 0
 
-    if os.path.exists(graph_prefix(kmer_k) + '.edges.0'):
+    if os.path.exists(graph_prefix(kmer_k) + '.rank.0' + '.edges.0'):
         build_cmd += ['--input_prefix', graph_prefix(kmer_k)]
-        file_size += os.path.getsize(graph_prefix(kmer_k) + '.edges.0')
-        tid = 1
-        while os.path.exists(graph_prefix(kmer_k) + '.edges.' + str(tid)):
-            file_size += os.path.getsize(graph_prefix(kmer_k) + '.edges.' + str(tid))
-            tid += 1
+        for rank in range(opt.num_processes):
+            for tid in range(opt.num_cpu_threads):
+                if os.path.exists(graph_prefix(kmer_k) + '.rank.' + str(rank) + '.edges.' + str(tid)):
+                    file_size += os.path.getsize(graph_prefix(kmer_k) + '.rank.' + str(rank) + '.edges.' + str(tid))
 
     if os.path.exists(contig_prefix(kmer_from) + '.addi.fa'):
         build_cmd += ['--addi_contig', contig_prefix(kmer_from) + '.addi.fa']

@@ -7,6 +7,7 @@
 
 #include "sdbg_def.h"
 #include "sdbg_meta.h"
+#include "mpienv/mpienv.hpp"
 
 #include <fstream>
 #include <memory>
@@ -39,6 +40,7 @@ class SdbgWriter {
   }
   void set_num_buckets(size_t num_buckets) { num_buckets_ = num_buckets; }
 
+  void InitFiles(MPIEnviroment& mpienv);
   void InitFiles();
   void Write(unsigned tid, uint32_t bucket_id, uint8_t w, uint8_t last,
              uint8_t tip, mul_t multiplicity, label_word_t *packed_tip_label,

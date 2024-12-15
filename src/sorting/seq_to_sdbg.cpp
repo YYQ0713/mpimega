@@ -364,7 +364,7 @@ SeqToSdbg::MemoryStat SeqToSdbg::Initialize() {
     int64_t num_multiplicities_to_reserve = 0;
 
     if (!opt_.input_prefix.empty()) {
-      EdgeReader edge_reader(opt_.input_prefix);
+      EdgeReader edge_reader(opt_.input_prefix, mpienv_);
       int64_t num_edges = edge_reader.GetMetadata().num_edges;
       xinfo("Number edges: {}\n", num_edges);
 
@@ -422,7 +422,7 @@ SeqToSdbg::MemoryStat SeqToSdbg::Initialize() {
         seq_pkg_.size_in_byte(), multiplicity.capacity());
 
   if (!opt_.input_prefix.empty()) {
-    EdgeReader reader(opt_.input_prefix);
+    EdgeReader reader(opt_.input_prefix, mpienv_);
     reader.SetMultiplicityVec(&multiplicity);
     auto n_read = reader.ReadAll(&seq_pkg_, false);
     xinfo("Read {} edges.\n", n_read);
@@ -516,7 +516,7 @@ SeqToSdbg::MemoryStat SeqToSdbg::Initialize() {
   sdbg_writer_.set_kmer_size(opt_.k);
   sdbg_writer_.set_num_buckets(kNumBuckets);
   sdbg_writer_.set_file_prefix(opt_.output_prefix);
-  sdbg_writer_.InitFiles();
+  sdbg_writer_.InitFiles(mpienv_);
 
   return {
       static_cast<int64_t>(seq_pkg_.seq_count()),

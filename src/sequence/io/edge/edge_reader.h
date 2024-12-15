@@ -7,16 +7,19 @@
 
 #include "edge_io_meta.h"
 #include "sequence/io/base_reader.h"
+#include "mpienv/mpienv.hpp"
+#include <assert.h>
+
 
 class EdgeReader : public BaseSequenceReader {
  public:
-  EdgeReader(const std::string &file_prefix) {
+  EdgeReader(const std::string &file_prefix, MPIEnviroment mpienv) {
+    mpienv_ = mpienv;
     file_prefix_ = file_prefix;
     std::ifstream is(file_prefix + ".edges.info");
     metadata_.Deserialize(is);
     InitFiles();
   }
-
   EdgeReader *SetMultiplicityVec(std::vector<mul_t> *mul) {
     mul_ = mul;
     return this;
@@ -63,7 +66,7 @@ class EdgeReader : public BaseSequenceReader {
 
  private:
   std::vector<mul_t> *mul_{nullptr};
-
+  MPIEnviroment mpienv_;
   std::string file_prefix_;
   std::vector<std::unique_ptr<std::ifstream>> in_streams_;
   BufferedReader cur_reader_;
@@ -81,11 +84,23 @@ class EdgeReader : public BaseSequenceReader {
     assert(!is_opened_);
     buffer_.resize(metadata_.words_per_edge);
 
-    for (unsigned i = 0; i < metadata_.num_files; ++i) {
-      in_streams_.emplace_back(
-          new std::ifstream(file_prefix_ + ".edges." + std::to_string(i),
-                            std::ifstream::binary | std::ifstream::in));
+    //for (unsigned i = 0; i < metadata_.num_files; ++i) {
+    //  in_streams_.emplace_back(
+    //      new std::ifstream(file_prefix_ + ".edges." + std::to_string(i),
+    //                        std::ifstream::binary | std::ifstream::in));
+    //}
+
+    unsigned t = metadata_.num_files / mpienv_.nprocs;
+    unsigned files_rem = metadata_.num_files % mpienv_.nprocs;
+    assert(files_rem == 0);
+    for (unsigned i = 0; i < mpienv_.nprocs; i++) {
+      for (unsigned j = 0; j < t; j++) {
+        in_streams_.emplace_back(
+            new std::ifstream(file_prefix_ + ".rank." + std::to_string(i) + ".edges." + std::to_string(j),
+                              std::ifstream::binary | std::ifstream::in));
+      }
     }
+    
 
     cur_cnt_ = 0;
     cur_vol_ = 0;

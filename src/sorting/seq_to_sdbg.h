@@ -54,8 +54,8 @@ class SeqToSdbg : public BaseSequenceSortingEngine {
   static const unsigned kSentinelValue = 4;
   static const unsigned kBWTCharNumBits = 3;
 
-  explicit SeqToSdbg(const Seq2SdbgOption &opt)
-      : BaseSequenceSortingEngine(opt.host_mem, opt.mem_flag, opt.n_threads),
+  explicit SeqToSdbg(const Seq2SdbgOption &opt, MPIEnviroment &mpienv)
+      : BaseSequenceSortingEngine(opt.host_mem, opt.mem_flag, opt.n_threads, mpienv),
         opt_(opt) {}
 
  public:
