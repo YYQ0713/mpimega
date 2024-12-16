@@ -24,8 +24,8 @@ void MPIEnviroment::print(const char *message)
 
 void MPIEnviroment::finalize()
 {
-	//assert(MPI_Finalize()==MPI_SUCCESS);
-	MPI_Finalize();
+	assert(MPI_Finalize() == MPI_SUCCESS);
+	//MPI_Finalize();
 }
 
 void MPIEnviroment::File_open(char *File_name)

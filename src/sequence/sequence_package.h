@@ -24,6 +24,7 @@
 
 #include <cassert>
 #include <cstdint>
+#include <iostream>
 #include <ostream>
 #include <vector>
 #include "kmlib/kmbit.h"
@@ -57,6 +58,11 @@ class SequencePackage {
 
     size_t base_at(unsigned index) const {
       assert(index < length());
+      if (index >= length())
+      {
+        std::cout << index << " " << length() << std::endl;
+      }
+      
       return package_->GetBase(seq_id_, index);
     }
 
