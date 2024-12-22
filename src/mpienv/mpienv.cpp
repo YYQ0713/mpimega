@@ -4,10 +4,10 @@
 
 void MPIEnviroment::init(int argc, char **argv)
 {
-	MPI_Init(&argc, &argv);
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
-	MPI_Get_processor_name(processor_name, &namelen);
+	MPI_CHECK(MPI_Init(&argc, &argv));
+	MPI_CHECK(MPI_Comm_rank(MPI_COMM_WORLD, &rank));
+	MPI_CHECK(MPI_Comm_size(MPI_COMM_WORLD, &nprocs));
+	MPI_CHECK(MPI_Get_processor_name(processor_name, &namelen));
 }
 
 void MPIEnviroment::print(const char *message)
@@ -24,8 +24,7 @@ void MPIEnviroment::print(const char *message)
 
 void MPIEnviroment::finalize()
 {
-	assert(MPI_Finalize() == MPI_SUCCESS);
-	//MPI_Finalize();
+	MPI_CHECK(MPI_Finalize());
 }
 
 void MPIEnviroment::File_open(char *File_name)

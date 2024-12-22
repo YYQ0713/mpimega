@@ -74,6 +74,9 @@ class EdgeWriter {
              Snapshot *snapshot) const {
     assert(metadata_.is_sorted);
     if (bucket != snapshot->bucket_id) {
+      if (snapshot->bucket_id != -1) {
+        xinfo("bucket: {} | snapshot->bucket_id {} | snapshot->bucket_info.file_id: | {}\n", bucket, snapshot->bucket_id, snapshot->bucket_info.file_id);
+      }
       assert(snapshot->bucket_id == -1);
       assert(snapshot->bucket_info.file_id == -1);
       snapshot->bucket_id = bucket;

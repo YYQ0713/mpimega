@@ -25,6 +25,17 @@
 #include <algorithm>
 using namespace std;
 
+#define MPI_CHECK(call) { \
+    int mpi_err = (call); \
+    if (mpi_err != MPI_SUCCESS) { \
+        char error_string[256]; \
+        int length_of_error_string; \
+        MPI_Error_string(mpi_err, error_string, &length_of_error_string); \
+        fprintf(stderr, "MPI error in function %s: %s\n", #call, error_string); \
+        MPI_Abort(MPI_COMM_WORLD, mpi_err); \
+    } \
+}
+
 class MPIEnviroment
 {
 public:

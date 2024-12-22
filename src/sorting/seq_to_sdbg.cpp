@@ -635,7 +635,7 @@ void SeqToSdbg::Lv2ExtractSubString(OffsetFetcher &fetcher, SubstrPtr substr) {
     unsigned strand = full_offset & 1;
 
     unsigned seq_len = seq_view.length();
-    unsigned num_chars_to_copy = opt_.k - (offset + opt_.k > seq_len);
+    unsigned num_chars_to_copy = opt_.k - (offset + opt_.k > seq_len); // ? is dummy ?
     int counting = 0;
 
     if (offset > 0 && offset + opt_.k <= seq_len) {
@@ -788,20 +788,112 @@ void SeqToSdbg::Lv2Postprocess(int64_t from, int64_t to, int tid,
   sdbg_writer_.SaveSnapshot(snapshot);
 }
 
+MPI_Datatype create_sdbg_bucket_record_type() {
+    MPI_Datatype mpi_sdbg_bucket_record;
+
+    // 定义每个字段的长度
+    const int kFieldCount = 10; // 总共 10 个字段，包括数组
+    int block_lengths[kFieldCount] = {
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 9 // 最后一项是数组 num_w 的大小
+    };
+
+    // 定义每个字段的偏移量
+    MPI_Aint displacements[kFieldCount];
+    displacements[0] = offsetof(SdbgBucketRecord, file_id);
+    displacements[1] = offsetof(SdbgBucketRecord, bucket_id);
+    displacements[2] = offsetof(SdbgBucketRecord, accumulate_item_count);
+    displacements[3] = offsetof(SdbgBucketRecord, accumulate_tip_count);
+    displacements[4] = offsetof(SdbgBucketRecord, starting_offset);
+    displacements[5] = offsetof(SdbgBucketRecord, num_items);
+    displacements[6] = offsetof(SdbgBucketRecord, num_tips);
+    displacements[7] = offsetof(SdbgBucketRecord, num_large_mul);
+    displacements[8] = offsetof(SdbgBucketRecord, ones_in_last);
+    displacements[9] = offsetof(SdbgBucketRecord, num_w);
+
+    // 定义每个字段的 MPI 数据类型
+    MPI_Datatype types[kFieldCount] = {
+        MPI_UNSIGNED_LONG, // file_id
+        MPI_UNSIGNED_LONG, // bucket_id
+        MPI_UNSIGNED_LONG, // accumulate_item_count
+        MPI_UNSIGNED_LONG, // accumulate_tip_count
+        MPI_UNSIGNED_LONG, // starting_offset
+        MPI_UNSIGNED_LONG, // num_items
+        MPI_UNSIGNED_LONG, // num_tips
+        MPI_UNSIGNED_LONG, // num_large_mul
+        MPI_UNSIGNED_LONG, // ones_in_last
+        MPI_UNSIGNED_LONG, // num_w (数组)
+    };
+
+    // 创建自定义 MPI 类型
+    MPI_Type_create_struct(kFieldCount, block_lengths, displacements, types, &mpi_sdbg_bucket_record);
+    MPI_Type_commit(&mpi_sdbg_bucket_record);
+
+    return mpi_sdbg_bucket_record;
+}
+
+void sdbg_bucket_record_reduce_op(void* invec, void* inoutvec, int* len, MPI_Datatype* datatype) {
+    SdbgBucketRecord* in = static_cast<SdbgBucketRecord*>(invec);
+    SdbgBucketRecord* inout = static_cast<SdbgBucketRecord*>(inoutvec);
+
+    int length = *len;
+
+    for (int i = 0; i < length; ++i) {
+      if (in[i].file_id != in[i].kNullID)
+      {
+        inout[i].file_id = in[i].file_id;
+        inout[i].bucket_id = in[i].bucket_id;
+        inout[i].accumulate_item_count = in[i].accumulate_item_count;
+        inout[i].accumulate_tip_count = in[i].accumulate_tip_count;
+        inout[i].starting_offset = in[i].starting_offset;
+        inout[i].num_items = in[i].num_items;
+        inout[i].num_tips = in[i].num_tips;
+        inout[i].num_large_mul = in[i].num_large_mul;
+        inout[i].ones_in_last = in[i].ones_in_last;
+
+        // 对数组字段逐元素执行归约（求和操作）
+        for (unsigned j = 0; j < kWAlphabetSize; ++j) {
+          inout[i].num_w[j] += in[i].num_w[j];
+        }
+      }
+    }
+}
+
+
 void SeqToSdbg::Lv0Postprocess() {
-  sdbg_writer_.Finalize();
-  xinfo("Number of $ A C G T A- C- G- T-:\n");
-  xinfo("");
-  for (int i = 0; i < 9; ++i) {
-    xinfoc("{} ", sdbg_writer_.final_meta().w_count(i));
+
+  // 创建自定义类型
+  MPI_Datatype mpi_sdbg_bucket_record = create_sdbg_bucket_record_type();
+  MPI_Op bucket_rec_reduce_op;
+  MPI_Op_create(sdbg_bucket_record_reduce_op, 1, &bucket_rec_reduce_op);
+
+  if (mpienv_.rank == 0) {
+    MPI_CHECK(MPI_Reduce(MPI_IN_PLACE, sdbg_writer_.bucket_rec_.data(),
+    sdbg_writer_.bucket_rec_.size(), mpi_sdbg_bucket_record, bucket_rec_reduce_op, 0, MPI_COMM_WORLD));
+  } else {
+    MPI_CHECK(MPI_Reduce(sdbg_writer_.bucket_rec_.data(), NULL,
+    sdbg_writer_.bucket_rec_.size(), mpi_sdbg_bucket_record, bucket_rec_reduce_op, 0, MPI_COMM_WORLD));
   }
 
-  xinfoc("{s}", "\n");
-  xinfo("Total number of edges: {}\n", sdbg_writer_.final_meta().item_count());
-  xinfo("Total number of ONEs: {}\n", sdbg_writer_.final_meta().ones_in_last());
-  xinfo("Total number of $v edges: {}\n",
-        sdbg_writer_.final_meta().tip_count());
+  sdbg_writer_.Finalize(mpienv_);
 
-  //assert(sdbg_writer_.final_meta().w_count(0) ==
-  //       sdbg_writer_.final_meta().tip_count());
+  if (mpienv_.rank == 0)
+  {
+    xinfo("Number of $ A C G T A- C- G- T-:\n");
+    xinfo("");
+    for (int i = 0; i < 9; ++i) {
+      xinfoc("{} ", sdbg_writer_.final_meta().w_count(i));
+    }
+
+    xinfoc("{s}", "\n");
+    xinfo("Total number of edges: {}\n", sdbg_writer_.final_meta().item_count());
+    xinfo("Total number of ONEs: {}\n", sdbg_writer_.final_meta().ones_in_last());
+    xinfo("Total number of $v edges: {}\n",
+          sdbg_writer_.final_meta().tip_count());
+
+    assert(sdbg_writer_.final_meta().w_count(0) ==
+          sdbg_writer_.final_meta().tip_count());
+  }
+
+  // 完成后释放自定义类型
+  MPI_Type_free(&mpi_sdbg_bucket_record);
 }

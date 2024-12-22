@@ -247,11 +247,11 @@ void BaseSequenceSortingEngine::Run() {
       //MPI_Win_unlock(0, win);
     //}
 
-    lv1_end_bucket_ = Lv1FindEndBuckets(lv1_start_bucket_);
-    if (lv1_end_bucket_ > lv1_end_bucket_local_)
-    {
-      lv1_end_bucket_ = lv1_end_bucket_local_;
-    }
+    lv1_end_bucket_ = Lv1FindEndBuckets(lv1_start_bucket_, lv1_end_bucket_local_);
+    //if (lv1_end_bucket_ > lv1_end_bucket_local_)
+    //{
+    //  lv1_end_bucket_ = lv1_end_bucket_local_;
+    //}
     assert(lv1_start_bucket_ < lv1_end_bucket_);
 
     lv1_iteration++;
@@ -276,7 +276,6 @@ void BaseSequenceSortingEngine::Run() {
     lv1_start_bucket_ = lv1_end_bucket_;
   }
 
-  //MPI_Win_free(&win);
   lv0_timer.stop();
   xinfo("Main loop done. Time elapsed: {.4}\n", lv0_timer.elapsed());
   lv0_timer.reset();
@@ -328,7 +327,7 @@ void BaseSequenceSortingEngine::Lv0ReorderBuckets() {
   }
 }
 
-unsigned BaseSequenceSortingEngine::Lv1FindEndBuckets(unsigned start_bucket) {
+unsigned BaseSequenceSortingEngine::Lv1FindEndBuckets(unsigned start_bucket, unsigned end_bucket_rank) {
   unsigned end_bucket = start_bucket;
   unsigned used_threads = 0;
   int64_t num_lv2 = 0;
@@ -337,7 +336,7 @@ unsigned BaseSequenceSortingEngine::Lv1FindEndBuckets(unsigned start_bucket) {
   cur_lv1_buckets_.resize(kNumBuckets);
   std::fill(cur_lv1_buckets_.begin(), cur_lv1_buckets_.end(), false);
 
-  while (end_bucket < kNumBuckets) {
+  while (end_bucket < end_bucket_rank) {
     if (used_threads < n_threads_) {
       num_lv2 += bucket_sizes_[end_bucket];
       ++used_threads;
@@ -354,7 +353,7 @@ unsigned BaseSequenceSortingEngine::Lv1FindEndBuckets(unsigned start_bucket) {
     ++end_bucket;
   }
 
-  return kNumBuckets;
+  return end_bucket_rank;
 }
 
 void BaseSequenceSortingEngine::Lv1ComputeThreadBegin() {

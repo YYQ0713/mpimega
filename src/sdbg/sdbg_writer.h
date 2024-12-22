@@ -45,8 +45,12 @@ class SdbgWriter {
   void Write(unsigned tid, uint32_t bucket_id, uint8_t w, uint8_t last,
              uint8_t tip, mul_t multiplicity, label_word_t *packed_tip_label,
              Snapshot *snapshot);
+  void Write(MPIEnviroment& mpienv, unsigned tid, uint32_t bucket_id, uint8_t w, uint8_t last,
+             uint8_t tip, mul_t multiplicity, label_word_t *packed_tip_label,
+             Snapshot *snapshot);
   void SaveSnapshot(const Snapshot &snapshot);
   void Finalize();
+  void Finalize(MPIEnviroment& mpienv);
   const SdbgMeta &final_meta() const { return final_meta_; }
 
  private:
@@ -56,12 +60,14 @@ class SdbgWriter {
 
   std::vector<std::unique_ptr<std::ofstream>> files_;
   std::vector<uint64_t> cur_thread_offset_;  // offset in BYTE
-  std::vector<SdbgBucketRecord> bucket_rec_;
 
   bool is_opened_{};
   unsigned k_{};
   size_t words_per_tip_label_{};
   SdbgMeta final_meta_;
+
+  public:
+  std::vector<SdbgBucketRecord> bucket_rec_;
 };
 
 #endif  // MEGAHIT_SDBG_WRITER_H

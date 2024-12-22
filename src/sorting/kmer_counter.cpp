@@ -478,10 +478,10 @@ void KmerCounter::Lv0Postprocess() {
   MPI_Op_create(atomic_wrapper_max_op, 1, &max_op);
   MPI_Op_create(edge_io_bucket_reduce_op, 1, &bucket_io_reduce_op);
 
-  MPI_Reduce(first_0_out_.data(), first_0_out_reduce_.data(), seq_pkg_.seq_count(), MPI_INT, min_op, 0, MPI_COMM_WORLD);
-  MPI_Reduce(last_0_in_.data(), last_0_in_reduce_.data(), seq_pkg_.seq_count(), MPI_INT, max_op, 0, MPI_COMM_WORLD);
-  MPI_Reduce(edge_counter_.local_counter_sum_.data(), edge_counter_.local_counter_sum_reduce_.data(), edge_counter_.local_counter_sum_.size(), MPI_LONG_LONG, MPI_SUM, 0, MPI_COMM_WORLD);
-  MPI_Reduce(edge_writer_.metadata_.buckets.data(), edge_writer_.metadata_.buckets_reduce.data(), edge_writer_.metadata_.buckets.size(), mpi_edge_io_bucket_info, bucket_io_reduce_op, 0, MPI_COMM_WORLD);
+  MPI_CHECK(MPI_Reduce(first_0_out_.data(), first_0_out_reduce_.data(), seq_pkg_.seq_count(), MPI_INT, min_op, 0, MPI_COMM_WORLD));
+  MPI_CHECK(MPI_Reduce(last_0_in_.data(), last_0_in_reduce_.data(), seq_pkg_.seq_count(), MPI_INT, max_op, 0, MPI_COMM_WORLD));
+  MPI_CHECK(MPI_Reduce(edge_counter_.local_counter_sum_.data(), edge_counter_.local_counter_sum_reduce_.data(), edge_counter_.local_counter_sum_.size(), MPI_INT64_T, MPI_SUM, 0, MPI_COMM_WORLD));
+  MPI_CHECK(MPI_Reduce(edge_writer_.metadata_.buckets.data(), edge_writer_.metadata_.buckets_reduce.data(), edge_writer_.metadata_.buckets.size(), mpi_edge_io_bucket_info, bucket_io_reduce_op, 0, MPI_COMM_WORLD));
 
 
   if (mpienv_.rank == 0)
@@ -511,7 +511,7 @@ void KmerCounter::Lv0Postprocess() {
     edge_counter_.DumpStat(counting_file);
   }
 
-
+  MPI_Type_free(&mpi_edge_io_bucket_info);
   // --- cleaning ---
   edge_writer_.Finalize(mpienv_);
 }

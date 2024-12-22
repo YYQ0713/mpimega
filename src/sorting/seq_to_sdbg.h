@@ -27,7 +27,7 @@
 #include <mutex>
 #include <string>
 #include <vector>
-#include "seq_base_engine.h"
+#include "base_engine.h"
 #include "sdbg/sdbg_writer.h"
 
 struct Seq2SdbgOption {
@@ -45,7 +45,7 @@ struct Seq2SdbgOption {
   bool need_mercy{false};
 };
 
-class SeqToSdbg : public SeqBaseSequenceSortingEngine {
+class SeqToSdbg : public BaseSequenceSortingEngine {
  public:
   // binary search look up table
   static const unsigned kLookUpPrefixLength = 12;
@@ -55,7 +55,7 @@ class SeqToSdbg : public SeqBaseSequenceSortingEngine {
   static const unsigned kBWTCharNumBits = 3;
 
   explicit SeqToSdbg(const Seq2SdbgOption &opt, MPIEnviroment &mpienv)
-      : SeqBaseSequenceSortingEngine(opt.host_mem, opt.mem_flag, opt.n_threads, mpienv),
+      : BaseSequenceSortingEngine(opt.host_mem, opt.mem_flag, opt.n_threads, mpienv),
         opt_(opt) {}
 
  public:

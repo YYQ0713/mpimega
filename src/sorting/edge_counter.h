@@ -58,7 +58,7 @@ class EdgeMultiplicityRecorder {
   }
 
   void addlocal() {
-    for (int i = 1; i < kMaxMul; i++)
+    for (int i = 1; i <= kMaxMul; i++)
     {
       for (const auto &counter : counters_) {
         local_counter_sum_[i] += counter[i];

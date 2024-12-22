@@ -246,7 +246,7 @@ class BaseSequenceSortingEngine {
   void Lv0PrepareThreadPartition();
   void Lv0CalcBucketSizeLaunchMt();
   void Lv0ReorderBuckets();
-  unsigned Lv1FindEndBuckets(unsigned start_bucket);
+  unsigned Lv1FindEndBuckets(unsigned start_bucket, unsigned end_bucket_rank);
   void Lv1ComputeThreadBegin();
   inline void Lv1FillOffsetsLaunchMt();
   void Lv1FetchAndSortLaunchMt();
