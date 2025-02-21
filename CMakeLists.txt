@@ -1,17 +1,20 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.18)
 project(mpimeta)
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
+add_subdirectory(thirdparty/ga-5.8.2)
+include_directories(thirdparty/ga-5.8.2/global/src)
+include_directories(thirdparty/ga-5.8.2/ma)
+include_directories(${CMAKE_BINARY_DIR}/thirdparty/ga-5.8.2/gaf2c)
 
 set(CMAKE_C_COMPILER mpicc)
 set(CMAKE_CXX_COMPILER mpicxx)
 
-
-if (CMAKE_VERSION VERSION_LESS "3.1")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
-else ()
-    set(CMAKE_CXX_STANDARD 11)
-endif ()
+#if (CMAKE_VERSION VERSION_LESS "3.1")
+#    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+#else ()
+set(CMAKE_CXX_STANDARD 14)
+#endif ()
 
 option(COVERAGE "Generate coverage report" OFF)
 option(STATIC_BUILD "Build static executation" OFF)
@@ -38,6 +41,7 @@ endif (STATIC_BUILD)
 
 find_package(ZLIB REQUIRED)
 find_package(OpenMP REQUIRED)
+
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DXXH_INLINE_ALL -ftemplate-depth=3000")
@@ -74,11 +78,28 @@ add_executable(mpimeta_core_no_hw_accel ${OTHER_SOURCE} ${SDBG_SOURCE} ${SEQ_SOU
 set_target_properties(mpimeta_core PROPERTIES COMPILE_FLAGS "-mbmi2 -DUSE_BMI2 -mpopcnt")
 set_target_properties(mpimeta_core_popcnt PROPERTIES COMPILE_FLAGS "-mpopcnt")
 
-
 target_link_libraries(mpimeta_core ${ZLIB_LIBRARIES})
 target_link_libraries(mpimeta_core_popcnt ${ZLIB_LIBRARIES})
 target_link_libraries(mpimeta_core_no_hw_accel ${ZLIB_LIBRARIES})
 
+target_link_libraries(mpimeta_core 
+		ga
+		ga++
+		m
+		armci
+		comex)
+target_link_libraries(mpimeta_core_popcnt 
+		ga
+		ga++
+		m
+		armci
+		comex)
+target_link_libraries(mpimeta_core_no_hw_accel 
+		ga
+		ga++
+		armci
+		m
+		comex)
 
 add_custom_target(
         mpimeta ALL

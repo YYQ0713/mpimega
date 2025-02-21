@@ -6,6 +6,7 @@
 #define KMLIB_COMPACTVECTOR_H
 
 #include <vector>
+#include <algorithm>
 
 namespace kmlib {
 
@@ -92,6 +93,15 @@ class CompactVector {
     return Adapter(vec_ptr_->data() + i / kBasesPerWord, i % kBasesPerWord);
   }
   void reserve(size_type size) { vec_ptr_->reserve(size_to_word_count(size)); }
+  void reserve_word(size_t size) { vec_ptr_->reserve(size); }
+
+  //Modify the size of sequence_ on ga initialisation
+  void update_ga(size_t local_size, size_t vec_size) {
+    auto new_end = std::copy(vec_ptr_->begin() + local_size, vec_ptr_->end(), vec_ptr_->begin());
+    int tmp_size = vec_size - local_size;
+    vec_ptr_->resize(tmp_size);
+  }
+
   void resize(size_type size) {
     size_type old_size = size_;
     size_ = size;

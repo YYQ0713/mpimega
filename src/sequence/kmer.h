@@ -34,7 +34,7 @@ class Kmer {
   }
 
   void InitFromPtr(const word_type *seq, unsigned offset, unsigned k) {
-    seq += offset / kCharsPerWord;
+    //auto seq = seq_ptr + offset / kCharsPerWord;
     offset %= kCharsPerWord;
     offset <<= 1;
 

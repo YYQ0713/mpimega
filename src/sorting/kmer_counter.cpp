@@ -12,7 +12,7 @@
  * 返回指定base在全局pkg里的偏移量，最低位包含strand信息，0为正，1为反向互补
  */
 inline int64_t EncodeOffset(int64_t read_id, int offset, int strand,
-                            const SeqPackage &p) {
+                              const SeqPackage &p) {
   return ((p.GetSeqView(read_id).full_offset_in_pkg() + offset) << 1) | strand;
 }
 
@@ -83,15 +83,10 @@ KmerCounter::MemoryStat KmerCounter::Initialize() {
   xinfo("{} words per substring, {} words per edge\n", words_per_substr_,
         words_per_edge_);
 
-  //TODO:需要实现原地reduce，专门创建一段内存用来reduce有点太浪费内存了，后面需要优化
   // --- malloc read first_in / last_out ---
   first_0_out_ =
       std::vector<AtomicWrapper<uint32_t>>(seq_pkg_.seq_count(), 0xFFFFFFFFU);
   last_0_in_ =
-      std::vector<AtomicWrapper<uint32_t>>(seq_pkg_.seq_count(), 0xFFFFFFFFU);
-  first_0_out_reduce_ =
-      std::vector<AtomicWrapper<uint32_t>>(seq_pkg_.seq_count(), 0xFFFFFFFFU);
-  last_0_in_reduce_ =
       std::vector<AtomicWrapper<uint32_t>>(seq_pkg_.seq_count(), 0xFFFFFFFFU);
 
   // --- initialize stat ---
@@ -106,7 +101,7 @@ KmerCounter::MemoryStat KmerCounter::Initialize() {
 
   int64_t memory_for_data = seq_pkg_.size_in_byte() +
                             +seq_pkg_.seq_count() * sizeof(first_0_out_[0]) *
-                                4  // first_in0 & last_out0
+                                2  // first_in0 & last_out0
                             + edge_counter_.size_in_byte();  // edge_counting
 
   return {
@@ -387,71 +382,72 @@ void KmerCounter::Lv2Postprocess(int64_t start_index, int64_t end_index,
   edge_writer_.SaveSnapshot(snapshot, thread_id);
 }
 
-void atomic_wrapper_min_op(void * a, void * b, int * len, MPI_Datatype * datatype) {
-
+namespace{
+  void atomic_wrapper_min_op(void * a, void * b, int * len, MPI_Datatype * datatype) {
+    
     AtomicWrapper<uint32_t>* a_ptr = static_cast<AtomicWrapper<uint32_t>*>(a);
     AtomicWrapper<uint32_t>* b_ptr = static_cast<AtomicWrapper<uint32_t>*>(b);
-
+    
     int lenth = *len;
-
+    
     for (int i = 0; i < lenth; ++i) {
-        auto a_val = a_ptr[i].v.load(std::memory_order::memory_order_relaxed);
-        auto b_val = b_ptr[i].v.load(std::memory_order::memory_order_relaxed);
-        if (a_val < b_val) {
-            b_ptr[i].v.store(a_val);
-        }
+      auto a_val = a_ptr[i].v.load(std::memory_order::memory_order_relaxed);
+      auto b_val = b_ptr[i].v.load(std::memory_order::memory_order_relaxed);
+      if (a_val < b_val) {
+        b_ptr[i].v.store(a_val);
+      }
     }
-}
-
-void atomic_wrapper_max_op(void * a, void * b, int * len, MPI_Datatype * datatype) {
-
+  }
+  
+  void atomic_wrapper_max_op(void * a, void * b, int * len, MPI_Datatype * datatype) {
+    
     AtomicWrapper<uint32_t>* a_ptr = static_cast<AtomicWrapper<uint32_t>*>(a);
     AtomicWrapper<uint32_t>* b_ptr = static_cast<AtomicWrapper<uint32_t>*>(b);
-
+    
     int lenth = *len;
-
+    
     for (int i = 0; i < lenth; ++i) {
-        auto a_val = a_ptr[i].v.load(std::memory_order::memory_order_relaxed);
-        auto b_val = b_ptr[i].v.load(std::memory_order::memory_order_relaxed);
-
-        if (a_val == 4294967295U)
-        {
-          continue;
-        }
-        
-        if (b_val == 4294967295U || a_val > b_val ) {
-            b_ptr[i].v.store(a_val);
-        }
+      auto a_val = a_ptr[i].v.load(std::memory_order::memory_order_relaxed);
+      auto b_val = b_ptr[i].v.load(std::memory_order::memory_order_relaxed);
+      
+      if (a_val == 4294967295U)
+      {
+        continue;
+      }
+      
+      if (b_val == 4294967295U || a_val > b_val ) {
+        b_ptr[i].v.store(a_val);
+      }
     }
-}
-
-MPI_Datatype create_edge_io_bucket_info_type() {
+  }
+  
+  MPI_Datatype create_edge_io_bucket_info_type() {
     MPI_Datatype mpi_edge_io_bucket_info;
-
+    
     // 定义每个字段的偏移量和类型
     int block_lengths[3] = {1, 1, 1};  // 每个字段都有一个元素
     MPI_Aint displacements[3];
     MPI_Datatype types[3] = {MPI_INT, MPI_LONG_LONG, MPI_LONG_LONG};
-
+    
     // 获取各个字段的偏移量
     displacements[0] = offsetof(EdgeIoBucketInfo, file_id);
     displacements[1] = offsetof(EdgeIoBucketInfo, file_offset);
     displacements[2] = offsetof(EdgeIoBucketInfo, total_number);
-
+    
     // 创建结构体类型
     MPI_Type_create_struct(3, block_lengths, displacements, types, &mpi_edge_io_bucket_info);
     MPI_Type_commit(&mpi_edge_io_bucket_info);
-
+    
     return mpi_edge_io_bucket_info;
-}
-
-// 自定义归约操作：如果 file_id 不等于 -1，则归约该结构体
-void edge_io_bucket_reduce_op(void* invec, void* inoutvec, int* len, MPI_Datatype* datatype) {
+  }
+  
+  // 自定义归约操作：如果 file_id 不等于 -1，则归约该结构体
+  void edge_io_bucket_reduce_op(void* invec, void* inoutvec, int* len, MPI_Datatype* datatype) {
     EdgeIoBucketInfo* in = static_cast<EdgeIoBucketInfo*>(invec);
     EdgeIoBucketInfo* inout = static_cast<EdgeIoBucketInfo*>(inoutvec);
-
+    
     int length = *len;
-
+    
     for (int i = 0; i < length; ++i) {
       if (in[i].file_id != -1) {  // 如果 file_id 不等于 -1
         inout[i].file_id = in[i].file_id;
@@ -459,13 +455,14 @@ void edge_io_bucket_reduce_op(void* invec, void* inoutvec, int* len, MPI_Datatyp
         inout[i].total_number = in[i].total_number;
       }
     }
+  }
 }
-
-void KmerCounter::Lv0Postprocess() {
-  // --- output reads for mercy ---
-  int64_t num_candidate_reads = 0;
-  int64_t num_has_tips = 0;
-
+  
+  void KmerCounter::Lv0Postprocess() {
+    // --- output reads for mercy ---
+    int64_t num_candidate_reads = 0;
+    int64_t num_has_tips = 0;
+    
   // add local counters
   edge_counter_.addlocal();
 
@@ -478,10 +475,42 @@ void KmerCounter::Lv0Postprocess() {
   MPI_Op_create(atomic_wrapper_max_op, 1, &max_op);
   MPI_Op_create(edge_io_bucket_reduce_op, 1, &bucket_io_reduce_op);
 
-  MPI_CHECK(MPI_Reduce(first_0_out_.data(), first_0_out_reduce_.data(), seq_pkg_.seq_count(), MPI_INT, min_op, 0, MPI_COMM_WORLD));
-  MPI_CHECK(MPI_Reduce(last_0_in_.data(), last_0_in_reduce_.data(), seq_pkg_.seq_count(), MPI_INT, max_op, 0, MPI_COMM_WORLD));
-  MPI_CHECK(MPI_Reduce(edge_counter_.local_counter_sum_.data(), edge_counter_.local_counter_sum_reduce_.data(), edge_counter_.local_counter_sum_.size(), MPI_INT64_T, MPI_SUM, 0, MPI_COMM_WORLD));
-  MPI_CHECK(MPI_Reduce(edge_writer_.metadata_.buckets.data(), edge_writer_.metadata_.buckets_reduce.data(), edge_writer_.metadata_.buckets.size(), mpi_edge_io_bucket_info, bucket_io_reduce_op, 0, MPI_COMM_WORLD));
+  if (mpienv_.rank == 0) {
+    MPI_CHECK(MPI_Reduce(MPI_IN_PLACE, first_0_out_.data(),
+    seq_pkg_.seq_count(), MPI_INT, min_op, 0, MPI_COMM_WORLD));
+  } else {
+    MPI_CHECK(MPI_Reduce(first_0_out_.data(), NULL,
+    seq_pkg_.seq_count(), MPI_INT, min_op, 0, MPI_COMM_WORLD));
+  }
+
+  if (mpienv_.rank == 0) {
+    MPI_CHECK(MPI_Reduce(MPI_IN_PLACE, last_0_in_.data(),
+    seq_pkg_.seq_count(), MPI_INT, max_op, 0, MPI_COMM_WORLD));
+  } else {
+    MPI_CHECK(MPI_Reduce(last_0_in_.data(), NULL,
+    seq_pkg_.seq_count(), MPI_INT, max_op, 0, MPI_COMM_WORLD));
+  }
+
+  if (mpienv_.rank == 0) {
+    MPI_CHECK(MPI_Reduce(MPI_IN_PLACE, edge_counter_.local_counter_sum_.data(),
+    edge_counter_.local_counter_sum_.size(), MPI_INT64_T, MPI_SUM, 0, MPI_COMM_WORLD));
+  } else {
+    MPI_CHECK(MPI_Reduce(edge_counter_.local_counter_sum_.data(), NULL,
+    edge_counter_.local_counter_sum_.size(), MPI_INT64_T, MPI_SUM, 0, MPI_COMM_WORLD));
+  }
+
+  if (mpienv_.rank == 0) {
+    MPI_CHECK(MPI_Reduce(MPI_IN_PLACE, edge_writer_.metadata_.buckets.data(),
+    edge_writer_.metadata_.buckets.size(), mpi_edge_io_bucket_info, bucket_io_reduce_op, 0, MPI_COMM_WORLD));
+  } else {
+    MPI_CHECK(MPI_Reduce(edge_writer_.metadata_.buckets.data(), NULL,
+    edge_writer_.metadata_.buckets.size(), mpi_edge_io_bucket_info, bucket_io_reduce_op, 0, MPI_COMM_WORLD));
+  }
+  
+  //MPI_Reduce(first_0_out_.data(), first_0_out_reduce_.data(), seq_pkg_.seq_count(), MPI_INT, min_op, 0, MPI_COMM_WORLD);
+  //MPI_Reduce(last_0_in_.data(), last_0_in_reduce_.data(), seq_pkg_.seq_count(), MPI_INT, max_op, 0, MPI_COMM_WORLD);
+  //MPI_Reduce(edge_counter_.local_counter_sum_.data(), edge_counter_.local_counter_sum_reduce_.data(), edge_counter_.local_counter_sum_.size(), MPI_INT64_T, MPI_SUM, 0, MPI_COMM_WORLD);
+  //MPI_Reduce(edge_writer_.metadata_.buckets.data(), edge_writer_.metadata_.buckets_reduce.data(), edge_writer_.metadata_.buckets.size(), mpi_edge_io_bucket_info, bucket_io_reduce_op, 0, MPI_COMM_WORLD);
 
 
   if (mpienv_.rank == 0)
@@ -490,8 +519,8 @@ void KmerCounter::Lv0Postprocess() {
                                 std::ofstream::binary | std::ofstream::out);
     for (size_t i = 0; i < seq_pkg_.seq_count(); ++i) {
       auto first =
-          first_0_out_reduce_[i].v.load(std::memory_order::memory_order_relaxed);
-      auto last = last_0_in_reduce_[i].v.load(std::memory_order::memory_order_relaxed);
+          first_0_out_[i].v.load(std::memory_order::memory_order_relaxed);
+      auto last = last_0_in_[i].v.load(std::memory_order::memory_order_relaxed);
 
       if (first != kSentinelOffset && last != kSentinelOffset) {
         ++num_has_tips;

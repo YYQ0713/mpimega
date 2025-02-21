@@ -78,6 +78,7 @@ class KmerCounter : public BaseSequenceSortingEngine {
                           // (k+1)-mer
   int64_t words_per_substr_{};  // substrings to be sorted by GPU
   SeqPackage seq_pkg_;
+
   // stat
   EdgeMultiplicityRecorder edge_counter_;
   // output
@@ -85,9 +86,9 @@ class KmerCounter : public BaseSequenceSortingEngine {
   
  public:
   std::vector<AtomicWrapper<uint32_t>> first_0_out_;
-  std::vector<AtomicWrapper<uint32_t>> first_0_out_reduce_;
+  //std::vector<AtomicWrapper<uint32_t>> first_0_out_reduce_;
   std::vector<AtomicWrapper<uint32_t>> last_0_in_;
-  std::vector<AtomicWrapper<uint32_t>> last_0_in_reduce_;
+  //std::vector<AtomicWrapper<uint32_t>> last_0_in_reduce_;
 };
 
 #endif  // MEGAHIT_KMER_COUNTER_H

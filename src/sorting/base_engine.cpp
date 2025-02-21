@@ -200,58 +200,17 @@ void BaseSequenceSortingEngine::Run() {
 
   lv0_timer.reset();
   lv0_timer.start();
-
-  // prepare mpi rma info
-  //int disp_unit;
-  //int *iter_info;
-  //MPI_Aint iter_info_size;
-  //MPI_Win win;
-
-  //MPI_Win_allocate(sizeof(int), sizeof(int), MPI_INFO_NULL, MPI_COMM_WORLD, &iter_info, &win);
-
-  //if (mpienv_.rank == 0){
-  //  iter_info[0] = 0;
-  //}
-
-  //MPI_Barrier(MPI_COMM_WORLD);
-  
-  //MPI_Win_lock(MPI_LOCK_EXCLUSIVE, 0, 0, win);
-  //MPI_Win_unlock(0, win);
   
   MPI_Scatter(lv1_start_bucket_vec.data(), 1, MPI_INT, &lv1_start_bucket_local_, 1, MPI_INT, 0, MPI_COMM_WORLD);
   MPI_Scatter(lv1_end_bucket_vec.data(), 1, MPI_INT, &lv1_end_bucket_local_, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
   lv1_start_bucket_ = lv1_start_bucket_local_;
-  
-  MPI_Barrier(MPI_COMM_WORLD);
   xinfo("Start main loop...\n");
   int lv1_iteration = 0;
   while (lv1_start_bucket_ < lv1_end_bucket_local_) {
     SimpleTimer lv1_timer;
 
-    //{
-      // --- finds the bucket range for this iteration ---
-      //MPI_Win_lock(MPI_LOCK_EXCLUSIVE, 0, 0, win);
-      //MPI_Get(&lv1_start_bucket_, 1, MPI_INT, 0, 0, 1, MPI_INT, win);
-      //MPI_Win_flush(0, win);
-      //if (lv1_start_bucket_ == kNumBuckets)
-      //{
-      //  MPI_Win_unlock(0, win);
-      //  break;
-      //}
-      
-      //lv1_end_bucket_ = Lv1FindEndBuckets(lv1_start_bucket_);
-      //assert(lv1_start_bucket_ < lv1_end_bucket_);
-      //MPI_Put(&lv1_end_bucket_, 1, MPI_INT, 0, 0, 1, MPI_INT, win);
-      //MPI_Win_flush(0, win);
-      //MPI_Win_unlock(0, win);
-    //}
-
     lv1_end_bucket_ = Lv1FindEndBuckets(lv1_start_bucket_, lv1_end_bucket_local_);
-    //if (lv1_end_bucket_ > lv1_end_bucket_local_)
-    //{
-    //  lv1_end_bucket_ = lv1_end_bucket_local_;
-    //}
     assert(lv1_start_bucket_ < lv1_end_bucket_);
 
     lv1_iteration++;

@@ -117,6 +117,34 @@ void SequenceLibCollection::Read(SeqPackage *pkg, bool reverse_seq) {
   xinfo("After reading, sizeof seq_package: {}\n", pkg->size_in_byte());
 }
 
+void SequenceLibCollection::ReadGA(SeqPackageGA *pkg, MPIEnviroment& mpienv, bool reverse_seq) {
+  std::ifstream lib_info_file(path_ + ".lib_info");
+  int64_t total_bases, num_reads;
+  bool is_paired;
+  std::string metadata;
+
+  lib_info_file >> total_bases >> num_reads;
+  std::getline(lib_info_file, metadata);  // eliminate the "\n"
+
+  while (std::getline(lib_info_file, metadata)) {
+    int64_t start, end;
+    int max_read_len;
+    lib_info_file >> start >> end >> max_read_len >> is_paired;
+    libs_GA_.emplace_back(pkg, start, end, max_read_len, is_paired, metadata);
+    std::getline(lib_info_file, metadata);  // eliminate the "\n"
+  }
+
+  pkg->Clear();
+  pkg->ReserveSequences(num_reads);
+  //pkg->ReserveBases(total_bases);
+  BinaryReader reader(path_ + ".bin");
+    
+  xinfo("Before reading, sizeof seq_package: {}\n", pkg->size_in_byte());
+  reader.ReadAllGA(pkg, mpienv, reverse_seq);
+  xinfo("After reading, sizeof seq_package: {}\n", pkg->size_in_byte());
+  
+}
+
 std::pair<int64_t, int64_t> SequenceLibCollection::GetSize() const {
   std::ifstream lib_info_file(path_ + ".lib_info");
   int64_t total_bases, num_reads;

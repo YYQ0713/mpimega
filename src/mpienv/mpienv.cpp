@@ -8,6 +8,9 @@ void MPIEnviroment::init(int argc, char **argv)
 	MPI_CHECK(MPI_Comm_rank(MPI_COMM_WORLD, &rank));
 	MPI_CHECK(MPI_Comm_size(MPI_COMM_WORLD, &nprocs));
 	MPI_CHECK(MPI_Get_processor_name(processor_name, &namelen));
+	GA_Initialize();
+  	ga_rank = GA_Nodeid();
+  	ga_nprocs = GA_Nnodes();
 }
 
 void MPIEnviroment::print(const char *message)
@@ -24,6 +27,7 @@ void MPIEnviroment::print(const char *message)
 
 void MPIEnviroment::finalize()
 {
+	GA_Terminate();
 	MPI_CHECK(MPI_Finalize());
 }
 

@@ -32,7 +32,7 @@
 #include <cstdlib>
 #include <ctime>
 #include <istream>
-
+#include <fstream>
 #include "pprintpp/pprintpp.hpp"
 
 inline FILE *xfopen(const char *filename, const char *mode) {
@@ -126,12 +126,38 @@ struct SimpleTimer {
 };
 
 struct AutoMaxRssRecorder {
-  struct timeval tv1 {
-  }, tv2{};
-
-  AutoMaxRssRecorder() { gettimeofday(&tv1, nullptr); }
+  struct timeval tv1 {}, tv2{};
+  long long mem1 = 0, mem2 = 0;
+  long long maxmem = 0;
+  AutoMaxRssRecorder() { 
+    gettimeofday(&tv1, nullptr);
+    std::ifstream statusFile("/proc/self/status");
+    std::string line;
+  
+    while (std::getline(statusFile, line)) {
+        if (line.find("VmRSS") == 0) {
+          mem1 = std::stoll(line.substr(6));
+          break;
+        }
+    }
+  }
 
   ~AutoMaxRssRecorder() { watch(); }
+
+  void checkmem() {
+    std::ifstream statusFile("/proc/self/status");
+    std::string line;
+  
+    while (std::getline(statusFile, line)) {
+        if (line.find("VmRSS") == 0) {
+          mem2 = std::stoll(line.substr(6));
+          break;
+        }
+    }
+
+    maxmem = (mem2 - mem1) > maxmem ?  (mem2 - mem1) : maxmem;
+    xinfoc("\tmaxrss: {}\n", maxmem);
+  }
 
   void watch() {
 #define TURN_ON_MAX_RSS_LOG
@@ -149,9 +175,21 @@ struct AutoMaxRssRecorder {
     long long real_time =
         static_cast<long long>(tv2.tv_sec - tv1.tv_sec) * 1000000 +
         tv2.tv_usec - tv1.tv_usec;
+    
+    std::ifstream statusFile("/proc/self/status");
+    std::string line;
+  
+    while (std::getline(statusFile, line)) {
+        if (line.find("VmRSS") == 0) {
+          mem2 = std::stoll(line.substr(6));
+            break;
+        }
+    }
+
+    maxmem = (mem2 - mem1) > maxmem ?  (mem2 - mem1) : maxmem;
     xinfo("Real: {.4}", real_time / 1000000.0);
-    xinfoc("\tuser: {.4}\tsys: {.4}\tmaxrss: {}\n", utime, stime,
-           usage.ru_maxrss);
+    xinfoc("\tuser: {.4}\tsys: {.4}\tmaxrss: {}\tmemused: {.4}\n", utime, stime,
+           usage.ru_maxrss, maxmem);
 #endif
   }
 };

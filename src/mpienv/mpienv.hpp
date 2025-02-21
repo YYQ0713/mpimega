@@ -2,6 +2,7 @@
 #define MPI_ENV_H_
 
 #include "mpi.h"
+#include "ga.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -54,6 +55,9 @@ public:
 	
 	//process status
     MPI_Status status;
+
+    //ga param
+    int ga_rank, ga_nprocs;
 
 public:
     void init(int argc, char **argv);

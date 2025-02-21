@@ -22,12 +22,12 @@ struct EdgeIoMetadata {
   int64_t num_edges{};
   bool is_sorted{true};
   std::vector<EdgeIoBucketInfo> buckets;
-  std::vector<EdgeIoBucketInfo> buckets_reduce;
+  //std::vector<EdgeIoBucketInfo> buckets_reduce;
 
   void Serialize(std::ofstream &os, MPIEnviroment &mpienv) {
     if (is_sorted) {
       num_edges = 0;
-      for (const auto &b : buckets_reduce) {
+      for (const auto &b : buckets) {
         num_edges += b.total_number;
       }
     }
@@ -35,13 +35,13 @@ struct EdgeIoMetadata {
     os << "kmer_size " << kmer_size << '\n'
        << "words_per_edge " << words_per_edge << '\n'
        << "num_files " << num_files * mpienv.nprocs << '\n'
-       << "num_buckets " << buckets_reduce.size() << '\n'
+       << "num_buckets " << buckets.size() << '\n'
        << "num_edges " << num_edges << '\n'
        << "is_sorted " << is_sorted << '\n';
 
-    for (unsigned i = 0; i < buckets_reduce.size(); ++i) {
-      os << i << ' ' << buckets_reduce[i].file_id << ' ' << buckets_reduce[i].file_offset
-         << ' ' << buckets_reduce[i].total_number << '\n';
+    for (unsigned i = 0; i < buckets.size(); ++i) {
+      os << i << ' ' << buckets[i].file_id << ' ' << buckets[i].file_offset
+         << ' ' << buckets[i].total_number << '\n';
     }
   }
 

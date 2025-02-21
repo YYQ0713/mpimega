@@ -27,6 +27,7 @@
 
 #include "definitions.h"
 #include "sorting/kmer_counter.h"
+#include "sorting/kmer_counter_ga.h"
 #include "sorting/read_to_sdbg.h"
 #include "sorting/seq_to_sdbg.h"
 #include "utils/options_description.h"
@@ -38,10 +39,11 @@ int main_kmer_count(int argc, char **argv) {
   MPIEnviroment mpienv;
   mpienv.init(argc, argv);
   
-  AutoMaxRssRecorder recorder;
+  //AutoMaxRssRecorder recorder;
   // parse option
   OptionsDescription desc;
-  KmerCounterOption opt;
+  //KmerCounterOption opt;//todo
+  KmerCounterOptionGA opt;//todo
 
   desc.AddOption("kmer_k", "k", opt.k, "kmer size");
   desc.AddOption("min_kmer_frequency", "m", opt.solid_threshold,
@@ -83,7 +85,7 @@ int main_kmer_count(int argc, char **argv) {
     exit(1);
   }
 
-  KmerCounter runner(opt, mpienv);
+  KmerCounterGA runner(opt, mpienv);
   runner.Run();
 
   mpienv.finalize();
@@ -161,5 +163,75 @@ int main_seq2sdbg(int argc, char **argv) {
   runner.Run();
 
   mpienv.finalize();
+  return 0;
+}
+
+int main_read2sdbg(int argc, char **argv) {
+  AutoMaxRssRecorder recorder;
+
+  // parse option the same as kmer_count
+  OptionsDescription desc;
+  Read2SdbgOption opt;
+
+  desc.AddOption("kmer_k", "k", opt.k, "kmer size");
+  desc.AddOption("min_kmer_frequency", "m", opt.solid_threshold,
+                 "min frequency to output an edge");
+  desc.AddOption(
+      "host_mem", "", opt.host_mem,
+      "Max memory to be used. 90% of the free memory is recommended.");
+  desc.AddOption("num_cpu_threads", "", opt.n_threads,
+                 "number of CPU threads. At least 2.");
+  desc.AddOption("read_lib_file", "", opt.read_lib_file,
+                 "input fast[aq] file, can be gzip'ed. \"-\" for stdin.");
+  desc.AddOption("output_prefix", "", opt.output_prefix, "output prefix");
+  desc.AddOption("mem_flag", "", opt.mem_flag,
+                 "memory options. 0: minimize memory usage; 1: automatically "
+                 "use moderate memory; "
+                 "other: use all "
+                 "available mem specified by '--host_mem'");
+  desc.AddOption("need_mercy", "", opt.need_mercy, "to add mercy edges.");
+
+  try {
+    desc.Parse(argc, argv);
+
+    if (opt.read_lib_file.empty()) {
+      throw std::logic_error("No input file!");
+    }
+
+    if (opt.n_threads == 0) {
+      opt.n_threads = omp_get_max_threads();
+    }
+
+    if (opt.host_mem == 0) {
+      throw std::logic_error("Please specify the host memory!");
+    }
+  } catch (std::exception &e) {
+    std::cerr << e.what() << std::endl;
+    std::cerr
+        << "Usage: sdbg_builder read2sdbg --read_lib_file fastx_file -o out"
+        << std::endl;
+    std::cerr << "Options:" << std::endl;
+    std::cerr << desc << std::endl;
+    exit(1);
+  }
+
+  SeqPkgWithSolidMarker pkg;
+
+  {
+    // stage 1
+    Read2SdbgS1 runner(opt, &pkg);
+    if (opt.solid_threshold > 1) {
+      runner.Run();
+    } else {
+      runner.Initialize();
+    }
+  }
+
+  {
+    // stage 2
+    Read2SdbgS2 runner(opt, &pkg);
+    runner.Run();
+  }
+
   return 0;
 }

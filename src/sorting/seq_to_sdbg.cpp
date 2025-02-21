@@ -721,6 +721,7 @@ void SeqToSdbg::Lv2Postprocess(int64_t from, int64_t to, int tid,
     has_solid_a = has_solid_b = 0;
     outputed_b = 0;
 
+    //so right here from startidx to endidx is same minusonemer
     for (int64_t i = start_idx; i < end_idx; ++i) {
       uint32_t *cur_item = substr + i * words_per_substr_;
       int a = Extract_a(cur_item, words_per_substr_, 1, opt_.k);

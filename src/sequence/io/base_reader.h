@@ -6,6 +6,8 @@
 #define MEGAHIT_BASE_READER_H
 
 #include "sequence/sequence_package.h"
+#include "sequence/sequence_package_ga.h"
+#include "mpienv/mpienv.hpp"
 
 class BaseSequenceReader {
  public:

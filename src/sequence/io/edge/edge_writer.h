@@ -45,9 +45,9 @@ class EdgeWriter {
   void SetFilePrefix(const std::string &prefix) { file_prefix_ = prefix; }
   void SetNumBuckets(int num_buckets) {
     metadata_.buckets.clear();
-    metadata_.buckets_reduce.clear();
+    //metadata_.buckets_reduce.clear();
     metadata_.buckets.resize(num_buckets);
-    metadata_.buckets_reduce.resize(num_buckets);
+    //metadata_.buckets_reduce.resize(num_buckets);
   }
   void SetUnordered() {
     metadata_.buckets.clear();
