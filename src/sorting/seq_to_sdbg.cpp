@@ -788,16 +788,16 @@ void SeqToSdbg::Lv2Postprocess(int64_t from, int64_t to, int tid,
   }
   sdbg_writer_.SaveSnapshot(snapshot);
 }
-
-MPI_Datatype create_sdbg_bucket_record_type() {
+namespace {
+  MPI_Datatype create_sdbg_bucket_record_type() {
     MPI_Datatype mpi_sdbg_bucket_record;
-
+    
     // 定义每个字段的长度
     const int kFieldCount = 10; // 总共 10 个字段，包括数组
     int block_lengths[kFieldCount] = {
-        1, 1, 1, 1, 1, 1, 1, 1, 1, 9 // 最后一项是数组 num_w 的大小
+      1, 1, 1, 1, 1, 1, 1, 1, 1, 9 // 最后一项是数组 num_w 的大小
     };
-
+    
     // 定义每个字段的偏移量
     MPI_Aint displacements[kFieldCount];
     displacements[0] = offsetof(SdbgBucketRecord, file_id);
@@ -810,34 +810,34 @@ MPI_Datatype create_sdbg_bucket_record_type() {
     displacements[7] = offsetof(SdbgBucketRecord, num_large_mul);
     displacements[8] = offsetof(SdbgBucketRecord, ones_in_last);
     displacements[9] = offsetof(SdbgBucketRecord, num_w);
-
+    
     // 定义每个字段的 MPI 数据类型
     MPI_Datatype types[kFieldCount] = {
-        MPI_UNSIGNED_LONG, // file_id
-        MPI_UNSIGNED_LONG, // bucket_id
-        MPI_UNSIGNED_LONG, // accumulate_item_count
-        MPI_UNSIGNED_LONG, // accumulate_tip_count
-        MPI_UNSIGNED_LONG, // starting_offset
-        MPI_UNSIGNED_LONG, // num_items
-        MPI_UNSIGNED_LONG, // num_tips
-        MPI_UNSIGNED_LONG, // num_large_mul
-        MPI_UNSIGNED_LONG, // ones_in_last
-        MPI_UNSIGNED_LONG, // num_w (数组)
+      MPI_UNSIGNED_LONG, // file_id
+      MPI_UNSIGNED_LONG, // bucket_id
+      MPI_UNSIGNED_LONG, // accumulate_item_count
+      MPI_UNSIGNED_LONG, // accumulate_tip_count
+      MPI_UNSIGNED_LONG, // starting_offset
+      MPI_UNSIGNED_LONG, // num_items
+      MPI_UNSIGNED_LONG, // num_tips
+      MPI_UNSIGNED_LONG, // num_large_mul
+      MPI_UNSIGNED_LONG, // ones_in_last
+      MPI_UNSIGNED_LONG, // num_w (数组)
     };
-
+    
     // 创建自定义 MPI 类型
     MPI_Type_create_struct(kFieldCount, block_lengths, displacements, types, &mpi_sdbg_bucket_record);
     MPI_Type_commit(&mpi_sdbg_bucket_record);
-
+    
     return mpi_sdbg_bucket_record;
-}
-
-void sdbg_bucket_record_reduce_op(void* invec, void* inoutvec, int* len, MPI_Datatype* datatype) {
+  }
+  
+  void sdbg_bucket_record_reduce_op(void* invec, void* inoutvec, int* len, MPI_Datatype* datatype) {
     SdbgBucketRecord* in = static_cast<SdbgBucketRecord*>(invec);
     SdbgBucketRecord* inout = static_cast<SdbgBucketRecord*>(inoutvec);
-
+    
     int length = *len;
-
+    
     for (int i = 0; i < length; ++i) {
       if (in[i].file_id != in[i].kNullID)
       {
@@ -850,17 +850,18 @@ void sdbg_bucket_record_reduce_op(void* invec, void* inoutvec, int* len, MPI_Dat
         inout[i].num_tips = in[i].num_tips;
         inout[i].num_large_mul = in[i].num_large_mul;
         inout[i].ones_in_last = in[i].ones_in_last;
-
+        
         // 对数组字段逐元素执行归约（求和操作）
         for (unsigned j = 0; j < kWAlphabetSize; ++j) {
           inout[i].num_w[j] += in[i].num_w[j];
         }
       }
     }
+  }
 }
-
-
-void SeqToSdbg::Lv0Postprocess() {
+  
+  
+  void SeqToSdbg::Lv0Postprocess() {
 
   // 创建自定义类型
   MPI_Datatype mpi_sdbg_bucket_record = create_sdbg_bucket_record_type();

@@ -61,7 +61,9 @@ public:
 
 public:
     void init(int argc, char **argv);
+    void init_ga(int argc, char **argv);
     void finalize();
+    void finalize_ga();
     void File_open(char *File_name);
 	void print(const char *message);
 };

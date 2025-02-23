@@ -115,16 +115,16 @@ Read2SdbgS1::MemoryStat Read2SdbgS1::Initialize() {
   // --- initialize output mercy files ---
   seq_pkg_->n_mercy_files = 1;
 
-  while (seq_pkg_->n_mercy_files * 10485760LL <
+  while (seq_pkg_->n_mercy_files * 10485760LL * mpienv_.nprocs <
              static_cast<int64_t>(seq_pkg_->package.seq_count()) &&
-         seq_pkg_->n_mercy_files < 64) {
+         seq_pkg_->n_mercy_files < (64 / mpienv_.nprocs)) {
     seq_pkg_->n_mercy_files <<= 1;
   }
   xinfo("Number of files for mercy candidate reads: {}\n",
         seq_pkg_->n_mercy_files);
 
   for (int i = 0; i < seq_pkg_->n_mercy_files; ++i) {
-    auto file_name = opt_.output_prefix + ".mercy_cand." + std::to_string(i);
+    auto file_name = opt_.output_prefix + ".mercy_cand." + std::to_string(i) + ".rank." + std::to_string(mpienv_.rank);
     mercy_files_.push_back(xfopen(file_name.c_str(), "wb"));
   }
 
@@ -555,11 +555,24 @@ void Read2SdbgS1::Lv2Postprocess(int64_t from, int64_t to, int thread,
 }
 
 void Read2SdbgS1::Lv0Postprocess() {
-  // --- stat ---
-  xinfo("Total number of solid edges: {}\n",
-        edge_counter_.GetNumSolidEdges(opt_.solid_threshold));
-  std::ofstream counting_file(std::string(opt_.output_prefix) + ".counting");
-  edge_counter_.DumpStat(counting_file);
+  edge_counter_.addlocal();
+
+  if (mpienv_.rank == 0) {
+    MPI_CHECK(MPI_Reduce(MPI_IN_PLACE, edge_counter_.local_counter_sum_.data(),
+    edge_counter_.local_counter_sum_.size(), MPI_INT64_T, MPI_SUM, 0, MPI_COMM_WORLD));
+  } else {
+    MPI_CHECK(MPI_Reduce(edge_counter_.local_counter_sum_.data(), NULL,
+    edge_counter_.local_counter_sum_.size(), MPI_INT64_T, MPI_SUM, 0, MPI_COMM_WORLD));
+  }
+
+  if (mpienv_.rank == 0) {  
+    // --- stat ---
+    xinfo("Total number of solid edges: {}\n",
+      edge_counter_.GetNumSolidEdges_mpi(opt_.solid_threshold));
+      std::ofstream counting_file(std::string(opt_.output_prefix) + ".counting");
+      edge_counter_.DumpStat(counting_file);
+  }
+
   for (int i = 0; i < seq_pkg_->n_mercy_files; ++i) {
     fclose(mercy_files_[i]);
   }

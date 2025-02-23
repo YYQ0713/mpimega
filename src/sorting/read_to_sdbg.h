@@ -55,8 +55,8 @@ class Read2SdbgS1 : public BaseSequenceSortingEngine {
   static const unsigned kSentinelValue = 4;
   static const unsigned kBWTCharNumBits = 3;
 
-  Read2SdbgS1(const Read2SdbgOption &opt, SeqPkgWithSolidMarker *pkg)
-      : BaseSequenceSortingEngine(opt.host_mem, opt.mem_flag, opt.n_threads),
+  Read2SdbgS1(const Read2SdbgOption &opt, SeqPkgWithSolidMarker *pkg, MPIEnviroment &mpienv)
+      : BaseSequenceSortingEngine(opt.host_mem, opt.mem_flag, opt.n_threads, mpienv),
         opt_(opt),
         seq_pkg_(pkg) {}
 
@@ -91,8 +91,8 @@ class Read2SdbgS2 : public BaseSequenceSortingEngine {
   static const unsigned kSentinelValue = 4;
   static const unsigned kBWTCharNumBits = 3;
 
-  Read2SdbgS2(const Read2SdbgOption &opt, SeqPkgWithSolidMarker *pkg)
-      : BaseSequenceSortingEngine(opt.host_mem, opt.mem_flag, opt.n_threads),
+  Read2SdbgS2(const Read2SdbgOption &opt, SeqPkgWithSolidMarker *pkg, MPIEnviroment &mpienv)
+      : BaseSequenceSortingEngine(opt.host_mem, opt.mem_flag, opt.n_threads, mpienv),
         opt_(opt),
         seq_pkg_(pkg) {}
 

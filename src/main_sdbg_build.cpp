@@ -43,7 +43,7 @@ int main_kmer_count(int argc, char **argv) {
   // parse option
   OptionsDescription desc;
   //KmerCounterOption opt;//todo
-  KmerCounterOptionGA opt;//todo
+  KmerCounterOption opt;//todo
 
   desc.AddOption("kmer_k", "k", opt.k, "kmer size");
   desc.AddOption("min_kmer_frequency", "m", opt.solid_threshold,
@@ -85,7 +85,7 @@ int main_kmer_count(int argc, char **argv) {
     exit(1);
   }
 
-  KmerCounterGA runner(opt, mpienv);
+  KmerCounter runner(opt, mpienv);
   runner.Run();
 
   mpienv.finalize();
@@ -168,6 +168,8 @@ int main_seq2sdbg(int argc, char **argv) {
 
 int main_read2sdbg(int argc, char **argv) {
   AutoMaxRssRecorder recorder;
+  MPIEnviroment mpienv;
+  mpienv.init(argc, argv);
 
   // parse option the same as kmer_count
   OptionsDescription desc;
@@ -219,7 +221,7 @@ int main_read2sdbg(int argc, char **argv) {
 
   {
     // stage 1
-    Read2SdbgS1 runner(opt, &pkg);
+    Read2SdbgS1 runner(opt, &pkg, mpienv);
     if (opt.solid_threshold > 1) {
       runner.Run();
     } else {
@@ -227,11 +229,14 @@ int main_read2sdbg(int argc, char **argv) {
     }
   }
 
+  MPI_Barrier(MPI_COMM_WORLD);
+
   {
     // stage 2
-    Read2SdbgS2 runner(opt, &pkg);
+    Read2SdbgS2 runner(opt, &pkg, mpienv);
     runner.Run();
   }
 
+  mpienv.finalize();
   return 0;
 }

@@ -82,7 +82,7 @@ int main(int argc, char **argv) {
   } else if (strcmp(argv[1], "count") == 0) {
     return main_kmer_count(argc - 1, argv + 1);
   } else if (strcmp(argv[1], "read2sdbg") == 0) {
-    //return main_read2sdbg(argc - 1, argv + 1);
+    return main_read2sdbg(argc - 1, argv + 1);
   } else if (strcmp(argv[1], "seq2sdbg") == 0) {
     return main_seq2sdbg(argc - 1, argv + 1);
   } else if (strcmp(argv[1], "contig2fastg") == 0) {

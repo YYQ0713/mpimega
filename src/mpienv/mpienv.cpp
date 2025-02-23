@@ -2,7 +2,7 @@
 #include "mpienv.hpp"
 
 
-void MPIEnviroment::init(int argc, char **argv)
+void MPIEnviroment::init_ga(int argc, char **argv)
 {
 	MPI_CHECK(MPI_Init(&argc, &argv));
 	MPI_CHECK(MPI_Comm_rank(MPI_COMM_WORLD, &rank));
@@ -11,6 +11,14 @@ void MPIEnviroment::init(int argc, char **argv)
 	GA_Initialize();
   	ga_rank = GA_Nodeid();
   	ga_nprocs = GA_Nnodes();
+}
+
+void MPIEnviroment::init(int argc, char **argv)
+{
+	MPI_CHECK(MPI_Init(&argc, &argv));
+	MPI_CHECK(MPI_Comm_rank(MPI_COMM_WORLD, &rank));
+	MPI_CHECK(MPI_Comm_size(MPI_COMM_WORLD, &nprocs));
+	MPI_CHECK(MPI_Get_processor_name(processor_name, &namelen));
 }
 
 void MPIEnviroment::print(const char *message)
@@ -25,10 +33,15 @@ void MPIEnviroment::print(const char *message)
 	printf("Proc:%d (%s)[%ld] -> %s\n", rank, processor_name, usage.ru_maxrss, message); 
 }
 
-void MPIEnviroment::finalize()
+void MPIEnviroment::finalize_ga()
 {
 	GA_Terminate();
-	MPI_CHECK(MPI_Finalize());
+	MPI_Finalize();
+}
+
+void MPIEnviroment::finalize()
+{
+	MPI_Finalize();
 }
 
 void MPIEnviroment::File_open(char *File_name)
