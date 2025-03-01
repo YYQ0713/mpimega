@@ -705,6 +705,7 @@ def create_library_file():
 @check_point
 def build_library():
     cmd = [opt.megahit_core, 'buildlib', opt.read_lib_path, opt.read_lib_path]
+    cmd = ['mpiexec', '-n', str(opt.num_processes), '--map-by', 'socket', '--bind-to', 'socket'] + cmd
     fifos = list()
     pipes = list()
 

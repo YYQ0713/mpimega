@@ -34,10 +34,7 @@
 #include "utils/utils.h"
 #include "mpienv/mpienv.hpp"
 
-int main_kmer_count(int argc, char **argv) {
-
-  MPIEnviroment mpienv;
-  mpienv.init(argc, argv);
+int main_kmer_count(int argc, char **argv, MPIEnviroment &mpienv) {
   
   //AutoMaxRssRecorder recorder;
   // parse option
@@ -88,15 +85,12 @@ int main_kmer_count(int argc, char **argv) {
   KmerCounter runner(opt, mpienv);
   runner.Run();
 
-  mpienv.finalize();
   return 0;
 }
 
 
-int main_seq2sdbg(int argc, char **argv) {
+int main_seq2sdbg(int argc, char **argv, MPIEnviroment &mpienv) {
 
-  MPIEnviroment mpienv;
-  mpienv.init(argc, argv);
   AutoMaxRssRecorder recorder;
 
   OptionsDescription desc;
@@ -162,14 +156,11 @@ int main_seq2sdbg(int argc, char **argv) {
   SeqToSdbg runner(opt, mpienv);
   runner.Run();
 
-  mpienv.finalize();
   return 0;
 }
 
-int main_read2sdbg(int argc, char **argv) {
+int main_read2sdbg(int argc, char **argv, MPIEnviroment &mpienv) {
   AutoMaxRssRecorder recorder;
-  MPIEnviroment mpienv;
-  mpienv.init(argc, argv);
 
   // parse option the same as kmer_count
   OptionsDescription desc;
@@ -237,6 +228,5 @@ int main_read2sdbg(int argc, char **argv) {
     runner.Run();
   }
 
-  mpienv.finalize();
   return 0;
 }

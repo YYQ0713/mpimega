@@ -42,6 +42,7 @@ struct Read2SdbgOption {
   std::string output_prefix{"out"};
   int mem_flag{1};
   bool need_mercy{false};
+  MPIEnviroment mpienv;
 };
 
 struct SeqPkgWithSolidMarker {
