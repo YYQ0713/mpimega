@@ -706,6 +706,7 @@ void SeqToSdbg::Lv2Postprocess(int64_t from, int64_t to, int tid,
   int has_solid_b = 0;  // has solid aSb
   int64_t last_a[4], outputed_b;
   SdbgWriter::Snapshot snapshot;
+  std::vector<MPI_Request> requests;
 
   for (start_idx = from; start_idx < to; start_idx = end_idx) {
     end_idx = start_idx + 1;
@@ -781,12 +782,12 @@ void SeqToSdbg::Lv2Postprocess(int64_t from, int64_t to, int tid,
       outputed_b |= 1 << b;
 
       sdbg_writer_.Write(
-          tid, cur_item[0] >> (32 - kBucketPrefixLength * 2), w, last,
+          mpienv_, requests, tid, cur_item[0] >> (32 - kBucketPrefixLength * 2), w, last,
           is_dollar, kMaxMul - ExtractCounting(cur_item, words_per_substr_, 1),
           cur_item, &snapshot);
     }
   }
-  sdbg_writer_.SaveSnapshot(snapshot);
+  sdbg_writer_.SaveSnapshot(snapshot, mpienv_.nprocs);
 }
 namespace {
   MPI_Datatype create_sdbg_bucket_record_type() {

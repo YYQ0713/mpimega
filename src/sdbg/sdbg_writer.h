@@ -42,13 +42,13 @@ class SdbgWriter {
 
   void InitFiles(MPIEnviroment& mpienv);
   void InitFiles();
-  void Write(unsigned tid, uint32_t bucket_id, uint8_t w, uint8_t last,
+  //void Write(unsigned tid, uint32_t bucket_id, uint8_t w, uint8_t last,
+  //           uint8_t tip, mul_t multiplicity, label_word_t *packed_tip_label,
+  //           Snapshot *snapshot);
+  void Write(MPIEnviroment& mpienv, std::vector<MPI_Request>& requests, unsigned tid, uint32_t bucket_id, uint8_t w, uint8_t last,
              uint8_t tip, mul_t multiplicity, label_word_t *packed_tip_label,
              Snapshot *snapshot);
-  void Write(MPIEnviroment& mpienv, unsigned tid, uint32_t bucket_id, uint8_t w, uint8_t last,
-             uint8_t tip, mul_t multiplicity, label_word_t *packed_tip_label,
-             Snapshot *snapshot);
-  void SaveSnapshot(const Snapshot &snapshot);
+  void SaveSnapshot(const Snapshot &snapshot, int nprocs);
   void Finalize();
   void Finalize(MPIEnviroment& mpienv);
   const SdbgMeta &final_meta() const { return final_meta_; }
@@ -58,7 +58,9 @@ class SdbgWriter {
   size_t num_threads_{};
   size_t num_buckets_{};
 
-  std::vector<std::unique_ptr<std::ofstream>> files_;
+  //std::vector<std::unique_ptr<std::ofstream>> files_;
+
+  std::vector<MPI_File> files_;
   std::vector<uint64_t> cur_thread_offset_;  // offset in BYTE
 
   bool is_opened_{};

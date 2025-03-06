@@ -15,7 +15,14 @@ void MPIEnviroment::init_ga(int argc, char **argv)
 
 void MPIEnviroment::init(int argc, char **argv)
 {
-	MPI_CHECK(MPI_Init(&argc, &argv));
+	//MPI_CHECK(MPI_Init(&argc, &argv));
+	MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
+
+	if (provided < MPI_THREAD_MULTIPLE) {
+		fprintf(stderr, "MPI does not support multiple threads!\n");
+		MPI_Abort(MPI_COMM_WORLD, 1);
+	}
+	
 	MPI_CHECK(MPI_Comm_rank(MPI_COMM_WORLD, &rank));
 	MPI_CHECK(MPI_Comm_size(MPI_COMM_WORLD, &nprocs));
 	MPI_CHECK(MPI_Get_processor_name(processor_name, &namelen));

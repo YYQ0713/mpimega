@@ -528,6 +528,7 @@ void Read2SdbgS2::Lv2Postprocess(int64_t from, int64_t to, int tid,
   int64_t last_a[4], outputed_b;
   uint32_t tip_label[32];
   SdbgWriter::Snapshot snapshot;
+  std::vector<MPI_Request> requests;
 
   for (start_idx = from; start_idx < to; start_idx = end_idx) {
     end_idx = start_idx + 1;
@@ -608,11 +609,17 @@ void Read2SdbgS2::Lv2Postprocess(int64_t from, int64_t to, int tid,
         }
       }
 
-      sdbg_writer_.Write(tid, cur_item[0] >> (32 - kBucketPrefixLength * 2), w,
-                         last, is_dollar, count, tip_label, &snapshot);//为什么不能mpienv？todo
+      sdbg_writer_.Write(mpienv_, requests, tid, cur_item[0] >> (32 - kBucketPrefixLength * 2), w,
+                         last, is_dollar, count, tip_label, &snapshot);
     }
   }
-  sdbg_writer_.SaveSnapshot(snapshot);
+
+  //waitall
+  //xinfo("before waitall...\n");
+  //MPI_Waitall(requests.size(), requests.data(), MPI_STATUSES_IGNORE);
+  //xinfo("after waitall...\n");
+
+  sdbg_writer_.SaveSnapshot(snapshot, mpienv_.nprocs);
 }
 
 namespace {
@@ -692,20 +699,16 @@ void Read2SdbgS2::Lv0Postprocess() {
   MPI_Datatype mpi_sdbg_bucket_record = create_sdbg_bucket_record_type();
   MPI_Op bucket_rec_reduce_op;
   MPI_Op_create(sdbg_bucket_record_reduce_op, 1, &bucket_rec_reduce_op);
-  xinfo("test1 rank : {}\n", mpienv_.rank);
 
   if (mpienv_.rank == 0) {
     MPI_CHECK(MPI_Reduce(MPI_IN_PLACE, sdbg_writer_.bucket_rec_.data(),
     sdbg_writer_.bucket_rec_.size(), mpi_sdbg_bucket_record, bucket_rec_reduce_op, 0, MPI_COMM_WORLD));
-    xinfo("test if rank : {}\n", mpienv_.rank);
   } else {
     MPI_CHECK(MPI_Reduce(sdbg_writer_.bucket_rec_.data(), NULL,
     sdbg_writer_.bucket_rec_.size(), mpi_sdbg_bucket_record, bucket_rec_reduce_op, 0, MPI_COMM_WORLD));
-    xinfo("test if rank : {}\n", mpienv_.rank);
   }
 
   sdbg_writer_.Finalize(mpienv_);
-  xinfo("test2 rank : {}\n", mpienv_.rank);
 
   if (mpienv_.rank == 0) {
     xinfo("Number of $ A C G T A- C- G- T-:\n");

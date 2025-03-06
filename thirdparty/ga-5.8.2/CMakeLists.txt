@@ -91,7 +91,7 @@ if(ENABLE_PROFILING)
 endif()
 
 # GA Runtime options: MPI runtime used to build GA
-ga_option(GA_RUNTIME MPI_2SIDED)
+ga_option(GA_RUNTIME MPI_MULTITHREADED)
 
 if (GA_RUNTIME STREQUAL MPI_PROGRESS_RANK)
   set (MPI_PR TRUE CACHE BOOL "use MPI progress ranks protocol for communication")

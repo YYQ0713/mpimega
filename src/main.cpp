@@ -546,8 +546,6 @@ void build_library(Options &opt) {
 
     // 传递给 main_build_lib
     main_build_lib(argv_vec.size(), const_cast<char**>(argv_vec.data()), opt.mpienv_);
-    printf("test1\n");
-
 
     // Clean up
     for (const std::string& fifo : fifos) {
@@ -940,7 +938,6 @@ void build_first_graph(Options& opt) {
 }
 
 void setup_logger(Options &opt) {
-    //mkdir_if_not_exists(opt.log_file_name());
 }
 
 int main(int argc, char **argv) {
@@ -954,12 +951,14 @@ int main(int argc, char **argv) {
     
     check_and_correct_option(opt);
 
+    MPI_Barrier(MPI_COMM_WORLD); // Barrier
+
     if (opt.mpienv_.rank == 0) {
         create_library_file(opt);
         build_library(opt);
     }
 
-    MPI_Barrier(MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD); // Barrier
     build_first_graph(opt);
 
     opt.mpienv_.finalize();
