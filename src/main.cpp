@@ -24,7 +24,7 @@
 #include "utils/cpu_dispatch.h"
 #include "utils/utils.h"
 
-int main_assemble(int argc, char **argv);
+int main_assemble(int argc, char **argv, MPIEnviroment &mpienv);
 int main_local(int argc, char **argv);
 int main_iterate(int argc, char **argv);
 int main_build_lib(int argc, char **argv, MPIEnviroment &mpienv);
@@ -231,6 +231,12 @@ std::string graph_prefix(const std::string &temp_dir, int kmer_k) {
     mkdir_if_not_exists(k_dir);
     // 返回 temp_dir/k<kmer_k>/<kmer_k>
     fs::path prefix = k_dir / std::to_string(kmer_k);
+    return prefix.string();
+}
+
+std::string contig_prefix(const std::string &contig_dir, int kmer_k) {
+    // 拼接目录 contig_dir/k<kmer_k>
+    fs::path prefix = fs::path(contig_dir) / ("k" + std::to_string(kmer_k));
     return prefix.string();
 }
 
@@ -940,6 +946,55 @@ void build_first_graph(Options& opt) {
 void setup_logger(Options &opt) {
 }
 
+void assemble(Options& opt, int cur_k) {
+    int min_standalone = std::max(std::min(opt.k_max * 3 - 1, (int)(opt.min_contig_len * 1.5)), opt.min_contig_len);
+    if (opt.max_tip_len >= 0)
+        min_standalone = std::max(opt.max_tip_len + opt.k_max - 1, opt.min_contig_len);
+
+    std::vector<std::string> args_assemble = {"assemble"    , "-s", graph_prefix(opt.temp_dir, cur_k)
+                                                            , "-o", contig_prefix(opt.contig_dir(), cur_k)
+                                                            , "-t", std::to_string(opt.num_cpu_threads)
+                                                            , "--min_standalone", std::to_string(min_standalone)
+                                                            , "--prune_level", std::to_string(opt.prune_level)
+                                                            , "--merge_len", std::to_string(opt.merge_len)
+                                                            , "--merge_similar", std::to_string(opt.merge_similar)
+                                                            , "--cleaning_rounds", std::to_string(opt.cleaning_rounds)
+                                                            , "--disconnect_ratio", std::to_string(opt.disconnect_ratio)
+                                                            , "--low_local_ratio", std::to_string(opt.low_local_ratio)
+                                                            , "--cleaning_rounds", std::to_string(opt.cleaning_rounds)
+                                                            , "--min_depth", std::to_string(opt.prune_depth)
+                                                            , "--bubble_level", std::to_string(opt.bubble_level)};
+    
+    if ((opt.max_tip_len == -1) && ((cur_k * 3 - 1) > (opt.min_contig_len * 1.5))) {
+        args_assemble.push_back("--max_tip_len");
+        args_assemble.push_back(std::to_string(std::max(1, (int)(opt.min_contig_len * 1.5 + 1 - cur_k))));
+    } else {
+        args_assemble.push_back("--max_tip_len");
+        args_assemble.push_back(std::to_string(opt.max_tip_len));
+    }
+
+    if (cur_k < opt.k_max)
+        args_assemble.push_back("--careful_bubble");
+    
+    if (cur_k == opt.k_max)
+        args_assemble.push_back("--is_final_round");
+        
+    if (opt.no_local)
+        args_assemble.push_back("--output_standalone");
+
+    
+    std::vector<const char*> asm_args;
+    for (const auto& arg : args_assemble) {
+        asm_args.push_back(arg.c_str());
+    }
+
+    main_assemble(asm_args.size(), const_cast<char**>(asm_args.data()), opt.mpienv_);
+
+    if (!opt.keep_tmp_files && cur_k != opt.k_max) {
+        //remove_temp_after_assemble();
+    }
+}
+
 int main(int argc, char **argv) {
     Options opt;
     opt.mpienv_.init(argc, argv);
@@ -951,8 +1006,6 @@ int main(int argc, char **argv) {
     
     check_and_correct_option(opt);
 
-    MPI_Barrier(MPI_COMM_WORLD); // Barrier
-
     if (opt.mpienv_.rank == 0) {
         create_library_file(opt);
         build_library(opt);
@@ -960,6 +1013,9 @@ int main(int argc, char **argv) {
 
     MPI_Barrier(MPI_COMM_WORLD); // Barrier
     build_first_graph(opt);
+
+    MPI_Barrier(MPI_COMM_WORLD); // Barrier
+    assemble(opt, opt.k_min);
 
     opt.mpienv_.finalize();
     return 0;

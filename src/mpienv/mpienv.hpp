@@ -46,7 +46,7 @@ public:
 	char hostname[255];
 	int  memusage;
     int namelen, rc;
-	int provided;
+	//int provided;
 	//file variables
     MPI_File cFile;
     MPI_Offset size;

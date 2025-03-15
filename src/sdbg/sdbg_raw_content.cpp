@@ -16,7 +16,8 @@
  * @param file_prefix the prefix of the SDBG files
  */
 void LoadSdbgRawContent(SdbgRawContent *raw_content,
-                        const std::string &file_prefix) {
+                        const std::string &file_prefix,
+                        int num_thread) {
   std::ifstream is(file_prefix + ".sdbg_info");
   raw_content->meta.Deserialize(is);
   const auto &metadata = raw_content->meta;
@@ -48,7 +49,7 @@ void LoadSdbgRawContent(SdbgRawContent *raw_content,
       }
       file_offset = 0;
       assert(in.read<char>(nullptr) == 0);
-      is.open((file_prefix + ".sdbg." + std::to_string(bucket_it->file_id))
+      is.open((file_prefix + ".rank." + std::to_string(bucket_it->file_id / num_thread) + ".sdbg." + std::to_string(bucket_it->file_id % num_thread))
                   .c_str());
       in.reset(&is);
       last_file_id = bucket_it->file_id;

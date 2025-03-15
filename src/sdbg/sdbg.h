@@ -23,8 +23,8 @@ class SDBG {
   SDBG() = default;
   ~SDBG() = default;
 
-  void LoadFromFile(const char *dbg_name) {
-    LoadSdbgRawContent(&content_, dbg_name);
+  void LoadFromFile(const char *dbg_name, int num_thread) {
+    LoadSdbgRawContent(&content_, dbg_name, num_thread);
     k_ = content_.meta.k();
     rs_is_tip_.from_packed_array(content_.tip.data(),
                                  content_.meta.item_count());

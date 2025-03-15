@@ -18,7 +18,7 @@ namespace kmlib {
  * @details Update of each bit is threads safe via set and get.
  * It can also be used as a vector of bit locks via try_lock, lock and unlock
  */
-template <typename WordType = unsigned long>
+template <typename WordType = uint64_t>
 class AtomicBitVector {
  public:
   using word_type = WordType;
@@ -151,6 +151,7 @@ class AtomicBitVector {
     std::swap(data_array_, rhs.data_array_);
   }
 
+  
  private:
   /*!
    * @brief a wrapper for std::Atomic. std::Atomic do not support copy and move
@@ -172,8 +173,10 @@ class AtomicBitVector {
   static const unsigned kBitsPerByte = 8;
   static const unsigned kBitsPerWord = sizeof(word_type) * kBitsPerByte;
   size_type size_;
-  array_type data_array_;
   static_assert(sizeof(AtomicWrapper<word_type>) == sizeof(word_type), "");
+
+ public:
+  array_type data_array_;
 };
 
 }  // namespace kmlib

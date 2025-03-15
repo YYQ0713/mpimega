@@ -528,7 +528,6 @@ void Read2SdbgS2::Lv2Postprocess(int64_t from, int64_t to, int tid,
   int64_t last_a[4], outputed_b;
   uint32_t tip_label[32];
   SdbgWriter::Snapshot snapshot;
-  std::vector<MPI_Request> requests;
 
   for (start_idx = from; start_idx < to; start_idx = end_idx) {
     end_idx = start_idx + 1;
@@ -609,7 +608,7 @@ void Read2SdbgS2::Lv2Postprocess(int64_t from, int64_t to, int tid,
         }
       }
 
-      sdbg_writer_.Write(mpienv_, requests, tid, cur_item[0] >> (32 - kBucketPrefixLength * 2), w,
+      sdbg_writer_.Write(mpienv_.rank, opt_.n_threads, tid, cur_item[0] >> (32 - kBucketPrefixLength * 2), w,
                          last, is_dollar, count, tip_label, &snapshot);
     }
   }
@@ -619,7 +618,7 @@ void Read2SdbgS2::Lv2Postprocess(int64_t from, int64_t to, int tid,
   //MPI_Waitall(requests.size(), requests.data(), MPI_STATUSES_IGNORE);
   //xinfo("after waitall...\n");
 
-  sdbg_writer_.SaveSnapshot(snapshot, mpienv_.nprocs);
+  sdbg_writer_.SaveSnapshot(snapshot, opt_.n_threads);
 }
 
 namespace {
@@ -700,6 +699,11 @@ void Read2SdbgS2::Lv0Postprocess() {
   MPI_Op bucket_rec_reduce_op;
   MPI_Op_create(sdbg_bucket_record_reduce_op, 1, &bucket_rec_reduce_op);
 
+  double start_time, end_time;
+
+  MPI_Barrier(MPI_COMM_WORLD); // 确保所有进程同步
+  start_time = MPI_Wtime();
+
   if (mpienv_.rank == 0) {
     MPI_CHECK(MPI_Reduce(MPI_IN_PLACE, sdbg_writer_.bucket_rec_.data(),
     sdbg_writer_.bucket_rec_.size(), mpi_sdbg_bucket_record, bucket_rec_reduce_op, 0, MPI_COMM_WORLD));
@@ -707,6 +711,10 @@ void Read2SdbgS2::Lv0Postprocess() {
     MPI_CHECK(MPI_Reduce(sdbg_writer_.bucket_rec_.data(), NULL,
     sdbg_writer_.bucket_rec_.size(), mpi_sdbg_bucket_record, bucket_rec_reduce_op, 0, MPI_COMM_WORLD));
   }
+
+  end_time = MPI_Wtime();
+  double elapsed_time = end_time - start_time;
+  xinfo("Process {}: MPI_Reduce took {} seconds\n", mpienv_.rank, elapsed_time);
 
   sdbg_writer_.Finalize(mpienv_);
 
@@ -725,5 +733,6 @@ void Read2SdbgS2::Lv0Postprocess() {
       sdbg_writer_.final_meta().tip_count());
   }
 
+  MPI_Op_free(&bucket_rec_reduce_op);
   MPI_Type_free(&mpi_sdbg_bucket_record);
 }

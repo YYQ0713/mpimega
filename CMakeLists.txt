@@ -22,12 +22,14 @@ option(SANITIZER "Enable sanitizers" OFF)
 option(TSAN "Enable thread sanitizers" OFF)
 
 include_directories(src)
+FILE(GLOB_RECURSE ASMBL_SOURCE "src/assembly/*.cpp")
 FILE(GLOB_RECURSE SDBG_SOURCE "src/sdbg/*.cpp")
 FILE(GLOB_RECURSE CX1_SOURCE "src/sorting/*.cpp")
 FILE(GLOB_RECURSE SEQ_SOURCE "src/sequence/*.cpp")
 FILE(GLOB_RECURSE MPI_SOURCE "src/mpienv/*.cpp")
 
 LIST(APPEND OTHER_SOURCE
+		src/main_assemble.cpp
         src/main.cpp
         src/main_buildlib.cpp
         src/main_sdbg_build.cpp
@@ -70,9 +72,9 @@ endif (TSAN)
 
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}: ${CMAKE_CXX_FLAGS}")
 
-add_executable(mpimeta_core ${OTHER_SOURCE} ${SDBG_SOURCE} ${SEQ_SOURCE} ${CX1_SOURCE} ${MPI_SOURCE})
-add_executable(mpimeta_core_popcnt ${OTHER_SOURCE} ${SDBG_SOURCE} ${SEQ_SOURCE} ${CX1_SOURCE} ${MPI_SOURCE})
-add_executable(mpimeta_core_no_hw_accel ${OTHER_SOURCE} ${SDBG_SOURCE} ${SEQ_SOURCE} ${CX1_SOURCE} ${MPI_SOURCE})
+add_executable(mpimeta_core ${OTHER_SOURCE} ${SDBG_SOURCE} ${SEQ_SOURCE} ${CX1_SOURCE} ${MPI_SOURCE} ${ASMBL_SOURCE})
+add_executable(mpimeta_core_popcnt ${OTHER_SOURCE} ${SDBG_SOURCE} ${SEQ_SOURCE} ${CX1_SOURCE} ${MPI_SOURCE} ${ASMBL_SOURCE})
+add_executable(mpimeta_core_no_hw_accel ${OTHER_SOURCE} ${SDBG_SOURCE} ${SEQ_SOURCE} ${CX1_SOURCE} ${MPI_SOURCE} ${ASMBL_SOURCE})
 
 set_target_properties(mpimeta_core PROPERTIES COMPILE_FLAGS "-mbmi2 -DUSE_BMI2 -mpopcnt")
 set_target_properties(mpimeta_core_popcnt PROPERTIES COMPILE_FLAGS "-mpopcnt")

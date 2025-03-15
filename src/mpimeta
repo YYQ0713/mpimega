@@ -1002,7 +1002,7 @@ def main(argv=None):
         logger.info('Memory used: %d' % opt.host_mem)
 
         build_first_graph()
-        #assemble(opt.k_min)
+        assemble(opt.k_min)
 
         #cur_k = opt.k_min
         #next_k_idx = 0

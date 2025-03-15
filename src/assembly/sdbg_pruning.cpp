@@ -1,0 +1,213 @@
+/*
+ *  MEGAHIT
+ *  Copyright (C) 2014 - 2015 The University of Hong Kong & L3 Bioinformatics
+ * Limited
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+/* contact: Dinghua Li <dhli@cs.hku.hk> */
+
+#include "sdbg_pruning.h"
+#include <algorithm>
+#include <cassert>
+#include <cmath>
+#include <queue>
+#include <unordered_set>
+#include <vector>
+
+#include "kmlib/kmbitvector.h"
+#include "utils/histgram.h"
+#include "utils/utils.h"
+
+namespace sdbg_pruning {
+
+double InferMinDepth(SDBG &dbg) {
+  Histgram<mul_t> hist;
+
+#pragma omp parallel for
+  for (uint64_t i = 0; i < dbg.size(); ++i) {
+    if (dbg.IsValidEdge(i)) {
+      hist.insert(dbg.EdgeMultiplicity(i));
+    }
+  }
+
+  double cov = hist.FirstLocalMinimum();
+  for (int repeat = 1; repeat <= 100; ++repeat) {
+    hist.TrimLow(static_cast<mul_t>(roundf(cov)));
+    unsigned median = hist.median();
+    double cov1 = sqrt(median);
+    if (fabs(cov - cov1) < 1e-2) {
+      return cov;
+    }
+    cov = cov1;
+  }
+
+  xwarn("Cannot detect min depth: unconverged");
+  return 1;
+}
+
+void to_remove_bor_op(void *a, void *b, int *len, MPI_Datatype *datatype) {
+    
+  AtomicWrapper<uint64_t>* a_ptr = static_cast<AtomicWrapper<uint64_t>*>(a);
+  AtomicWrapper<uint64_t>* b_ptr = static_cast<AtomicWrapper<uint64_t>*>(b);
+  
+  int lenth = *len;
+  
+  for (int i = 0; i < lenth; ++i) {
+    auto a_val = a_ptr[i].v.load(std::memory_order::memory_order_relaxed);
+    auto b_val = b_ptr[i].v.load(std::memory_order::memory_order_relaxed);
+    
+    b_ptr[i].v.store(a_val | b_val);
+  }
+}
+
+int64_t Trim(SDBG &dbg, int len, AtomicBitVector &ignored, MPIEnviroment &mpienv) {
+  int64_t number_tips = 0;
+  AtomicBitVector to_remove(dbg.size());
+  std::vector<uint64_t> path;
+
+  MPI_Op atomic_reduce;
+  MPI_Op_create(to_remove_bor_op, 1, &atomic_reduce);
+
+  int64_t num_edges_mean = dbg.size() / mpienv.nprocs;
+  int64_t remain = dbg.size() % mpienv.nprocs;
+  int64_t start_index = mpienv.rank * num_edges_mean + (mpienv.rank < remain ? mpienv.rank : remain);
+  int64_t end_index = start_index + num_edges_mean + (mpienv.rank < remain ? 1 : 0);
+
+#pragma omp parallel for reduction(+ : number_tips) private(path)
+  for (uint64_t id = start_index; id < end_index; ++id) {
+    if (!ignored.at(id) && dbg.EdgeOutdegreeZero(id)) {
+      uint64_t prev = SDBG::kNullID;
+      uint64_t cur = id;
+      bool is_tip = false;
+      path.clear();
+      path.push_back(id);
+
+      for (int i = 1; i < len; ++i) {
+        prev = dbg.UniquePrevEdge(cur);
+        if (prev == SDBG::kNullID) {
+          is_tip = dbg.EdgeIndegreeZero(cur);
+          break;
+        } else if (dbg.UniqueNextEdge(prev) == SDBG::kNullID) {
+          is_tip = true;
+          break;
+        } else {
+          path.push_back(prev);
+          cur = prev;
+        }
+      }
+      if (is_tip) {
+        for (unsigned long i : path) {
+          to_remove.set(i);
+        }
+        ++number_tips;
+        ignored.set(id);
+        ignored.set(path.back());
+        if (prev != SDBG::kNullID) {
+          ignored.unset(prev);
+        }
+      }
+    }
+  }
+
+#pragma omp parallel for reduction(+ : number_tips) private(path)
+  for (uint64_t id = start_index; id < end_index; ++id) {
+    if (!ignored.at(id) && dbg.EdgeIndegreeZero(id)) {
+      uint64_t next = SDBG::kNullID;
+      uint64_t cur = id;
+      bool is_tip = false;
+      path.clear();
+      path.push_back(id);
+
+      for (int i = 1; i < len; ++i) {
+        next = dbg.UniqueNextEdge(cur);
+        if (next == SDBG::kNullID) {
+          is_tip = dbg.EdgeOutdegreeZero(cur);
+          break;
+        } else if (dbg.UniquePrevEdge(next) == SDBG::kNullID) {
+          is_tip = true;
+          break;
+        } else {
+          path.push_back(next);
+          cur = next;
+        }
+      }
+      if (is_tip) {
+        for (unsigned long i : path) {
+          to_remove.set(i);
+        }
+        ++number_tips;
+        ignored.set(id);
+        ignored.set(path.back());
+        if (next != SDBG::kNullID) {
+          ignored.unset(next);
+        }
+      }
+    }
+  }
+
+  MPI_Allreduce(MPI_IN_PLACE, &number_tips, 1, MPI_LONG_LONG_INT, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE, to_remove.data_array_.data(), to_remove.data_array_.size(), MPI_UINT64_T, atomic_reduce, MPI_COMM_WORLD);
+  //MPI_Allreduce(MPI_IN_PLACE, ignored.data_array_.data(), ignored.data_array_.size(), MPI_UINT64_T, atomic_reduce, MPI_COMM_WORLD);
+
+#pragma omp parallel for
+  for (uint64_t id = 0; id < dbg.size(); ++id) {
+    if (to_remove.at(id)) {
+      dbg.SetInvalidEdge(id);
+    }
+  }
+
+  MPI_Op_free(&atomic_reduce);
+  return number_tips;
+}
+
+uint64_t RemoveTips(SDBG &dbg, int max_tip_len, MPIEnviroment &mpienv) {
+  uint64_t number_tips = 0;
+  SimpleTimer timer;
+  AtomicBitVector ignored(dbg.size());
+
+#pragma omp parallel for
+  for (uint64_t id = 0; id < dbg.size(); ++id) {
+    if (!dbg.EdgeIndegreeZero(id) && !dbg.EdgeOutdegreeZero(id)) {
+      ignored.set(id);
+    }
+  }
+  
+  for (int len = 2; len < max_tip_len; len *= 2) {
+    if (mpienv.rank == 0)
+      xinfo("Removing tips with length less than {}; ", len);
+    timer.reset();
+    timer.start();
+    number_tips += Trim(dbg, len, ignored, mpienv);
+    timer.stop();
+    if (mpienv.rank == 0)
+      xinfoc("Accumulated tips removed: {}; time elapsed: {.4}\n", number_tips,
+            timer.elapsed());
+  }
+
+  if (mpienv.rank == 0)
+    xinfo("Removing tips with length less than {}; ", max_tip_len);
+  timer.reset();
+  timer.start();
+  number_tips += Trim(dbg, max_tip_len, ignored, mpienv);
+  timer.stop();
+  if (mpienv.rank == 0)
+    xinfoc("Accumulated tips removed: {}; time elapsed: {.4}\n", number_tips,
+          timer.elapsed());
+
+  return number_tips;
+}
+
+}  // namespace sdbg_pruning

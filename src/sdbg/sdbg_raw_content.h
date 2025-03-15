@@ -26,6 +26,7 @@ struct SdbgRawContent {
 };
 
 void LoadSdbgRawContent(SdbgRawContent *raw_content,
-                        const std::string &file_prefix);
+                        const std::string &file_prefix,
+                        int num_thread);
 
 #endif  // MEGAHIT_SDBG_RAW_CONTENT_H

@@ -540,6 +540,9 @@ namespace{
     edge_counter_.DumpStat(counting_file);
   }
 
+  MPI_Op_free(&min_op);
+  MPI_Op_free(&max_op);
+  MPI_Op_free(&bucket_io_reduce_op);
   MPI_Type_free(&mpi_edge_io_bucket_info);
   // --- cleaning ---
   edge_writer_.Finalize(mpienv_);
