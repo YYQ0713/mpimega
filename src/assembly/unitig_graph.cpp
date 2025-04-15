@@ -10,13 +10,16 @@
 #include "utils/mutex.h"
 #include "utils/utils.h"
 
-UnitigGraph::UnitigGraph(SDBG *sdbg)
-    : sdbg_(sdbg), adapter_impl_(this), sudo_adapter_impl_(this) {
+UnitigGraph::UnitigGraph(SDBG *sdbg, uint32_t rank)
+    : sdbg_(sdbg), rank_(rank), adapter_impl_(this), sudo_adapter_impl_(this) {
   id_map_.clear();
   vertices_.clear();
   SpinLock path_lock;
   AtomicBitVector locks(sdbg_->size());
   size_t count_palindrome = 0;
+  size_t vertices_size = 0;
+
+  if (rank == 0) {
 // assemble simple paths
 #pragma omp parallel for reduction(+ : count_palindrome)
   for (uint64_t edge_idx = 0; edge_idx < sdbg_->size(); ++edge_idx) {
@@ -118,6 +121,18 @@ UnitigGraph::UnitigGraph(SDBG *sdbg)
       }
     }
   }
+  vertices_size = vertices_.size();
+}// if (rank == 0)
+
+  MPI_Bcast(&vertices_size, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+  if (rank != 0) {
+    vertices_.resize(vertices_size);
+  }
+  UnitigGraph::Mpi_Bcast_vertices();
+
+  xinfo("diff {}\n", vertices_[0].length);
+  xinfo("diff {}\n", vertices_[2000].length);
+  xinfo("diff {}\n", vertices_[4000].length);
 
   if (vertices_.size() >= kMaxNumVertices) {
     xfatal(
@@ -294,7 +309,6 @@ void UnitigGraph::Refresh(bool set_changed) {
       break;
     }
   }
-
   // looped path
   std::mutex mutex;
 #pragma omp parallel for
@@ -334,7 +348,7 @@ void UnitigGraph::Refresh(bool set_changed) {
       if (set_changed) adapter.SetChanged();
     }
   }
-
+  
   vertices_.resize(std::remove_if(vertices_.begin(), vertices_.end(),
                                   [](UnitigGraphVertex &a) {
                                     return SudoVertexAdapter(a).GetFlag() &
@@ -343,6 +357,7 @@ void UnitigGraph::Refresh(bool set_changed) {
                    vertices_.begin());
 
   size_type num_changed = 0;
+  
 #pragma omp parallel for reduction(+ : num_changed)
   for (size_type i = 0; i < vertices_.size(); ++i) {
     auto adapter = MakeSudoAdapter(i);
@@ -391,4 +406,107 @@ std::string UnitigGraph::VertexToDNAString(VertexAdapter v) {
 
   std::reverse(label.begin(), label.end());
   return label;
+}
+
+void UnitigGraph_Allreduce_Vertices_Op(void* invec, void* inoutvec, int* len, MPI_Datatype* datatype) {
+  UnitigGraphVertex* in = static_cast<UnitigGraphVertex*>(invec);
+  UnitigGraphVertex* inout = static_cast<UnitigGraphVertex*>(inoutvec);
+  
+  uint32_t length = static_cast<uint32_t>(*len);
+
+  for (uint32_t i = 0; i < length; ++i) {
+    uint8_t flag_in = in[i].flag.v.load(std::memory_order::memory_order_relaxed);
+    auto old_val = inout[i].flag.v.fetch_or(flag_in, std::memory_order::memory_order_relaxed);
+  }
+}
+
+void UnitigGraph::Mpi_Allreduce_vertices() {
+  MPI_Datatype MPI_vertices;
+  
+  // 定义每个字段的长度
+  const int kFieldCount = 7;
+  int block_lengths[kFieldCount] = {4, 1, 1, 1, 1, 1, 1};
+
+  // 定义每个字段的偏移量
+  MPI_Aint displacements[kFieldCount];
+  displacements[0] = offsetof(UnitigGraphVertex, strand_info);
+  displacements[1] = offsetof(UnitigGraphVertex, total_depth);
+  displacements[2] = offsetof(UnitigGraphVertex, length);
+  displacements[3] = offsetof(UnitigGraphVertex, is_looped);
+  displacements[4] = offsetof(UnitigGraphVertex, is_palindrome);
+  displacements[5] = offsetof(UnitigGraphVertex, is_changed);
+  displacements[6] = offsetof(UnitigGraphVertex, flag);
+
+  // 定义每个字段的 MPI 数据类型
+  MPI_Datatype types[kFieldCount] = {
+    MPI_UINT64_T, // strand_info
+    MPI_UINT64_T, // total_depth
+    MPI_UINT32_T, // length
+    MPI_C_BOOL, // is_looped
+    MPI_C_BOOL, // is_palindrome
+    MPI_C_BOOL, // is_changed
+    MPI_UINT8_T, // flag
+  };
+  xinfo("diff {}\n", vertices_[0].length);
+  xinfo("diff {}\n", vertices_[2000].length);
+  xinfo("diff {}\n", vertices_[4000].length);
+
+  // 创建自定义 MPI 类型
+  MPI_Type_create_struct(kFieldCount, block_lengths, displacements, types, &MPI_vertices);
+  MPI_Type_commit(&MPI_vertices);
+  MPI_Op Vertices_Ar_Op;
+  MPI_Op_create(UnitigGraph_Allreduce_Vertices_Op, 1, &Vertices_Ar_Op);
+
+  MPI_Allreduce(MPI_IN_PLACE, vertices_.data(), vertices_.size(), MPI_vertices, Vertices_Ar_Op, MPI_COMM_WORLD);
+
+  MPI_Type_free(&MPI_vertices);
+  MPI_Op_free(&Vertices_Ar_Op);
+}
+
+void UnitigGraph::Mpi_Bcast_vertices() {
+  MPI_Datatype MPI_vertices;
+  
+  // 定义每个字段的长度
+  const int kFieldCount = 7;
+  int block_lengths[kFieldCount] = {4, 1, 1, 1, 1, 1, 1};
+
+  // 定义每个字段的偏移量
+  MPI_Aint displacements[kFieldCount];
+  displacements[0] = offsetof(UnitigGraphVertex, strand_info);
+  displacements[1] = offsetof(UnitigGraphVertex, total_depth);
+  displacements[2] = offsetof(UnitigGraphVertex, length);
+  displacements[3] = offsetof(UnitigGraphVertex, is_looped);
+  displacements[4] = offsetof(UnitigGraphVertex, is_palindrome);
+  displacements[5] = offsetof(UnitigGraphVertex, is_changed);
+  displacements[6] = offsetof(UnitigGraphVertex, flag);
+
+  // 定义每个字段的 MPI 数据类型
+  MPI_Datatype types[kFieldCount] = {
+    MPI_UINT64_T, // strand_info
+    MPI_UINT64_T, // total_depth
+    MPI_UINT32_T, // length
+    MPI_C_BOOL, // is_looped
+    MPI_C_BOOL, // is_palindrome
+    MPI_C_BOOL, // is_changed
+    MPI_UINT8_T, // flag
+  };
+
+  // 创建自定义 MPI 类型
+  MPI_Type_create_struct(kFieldCount, block_lengths, displacements, types, &MPI_vertices);
+  MPI_Type_commit(&MPI_vertices);
+
+  MPI_Bcast(vertices_.data(), vertices_.size(), MPI_vertices, 0, MPI_COMM_WORLD);
+  //MPI_Allreduce(MPI_IN_PLACE, ignored.data_array_.data(), ignored.data_array_.size(), MPI_UNSIGNED_LONG, MPI_BAND, MPI_COMM_WORLD);
+
+  MPI_Type_free(&MPI_vertices);
+}
+
+void UnitigGraph::show_info() {
+  xinfo("diff {}\n", vertices_[0].length);
+  xinfo("diff {}\n", vertices_[2000].length);
+  xinfo("diff {}\n", vertices_[4000].length);
+}
+
+void UnitigGraph::vertices_resize(uint32_t size) {
+  vertices_.resize(size);
 }

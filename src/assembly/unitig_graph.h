@@ -21,7 +21,7 @@ class UnitigGraph {
   static const size_type kNullVertexID = kMaxNumVertices + 1;
 
  public:
-  explicit UnitigGraph(SDBG *sdbg);
+  explicit UnitigGraph(SDBG *sdbg, uint32_t rank);
   UnitigGraph(const UnitigGraph &) = delete;
   UnitigGraph(const UnitigGraph &&) = delete;
   ~UnitigGraph() = default;
@@ -30,6 +30,10 @@ class UnitigGraph {
 
  public:
   void Refresh(bool mark_changed = false);
+  void Mpi_Allreduce_vertices();
+  void Mpi_Bcast_vertices();
+  void show_info();
+  void vertices_resize(uint32_t size);
   std::string VertexToDNAString(VertexAdapter adapter);
 
  public:
@@ -157,7 +161,9 @@ class UnitigGraph {
 
  private:
   SDBG *sdbg_{};
-  std::deque<UnitigGraphVertex> vertices_;
+  uint32_t rank_;
+  //std::deque<UnitigGraphVertex> vertices_;
+  std::vector<UnitigGraphVertex> vertices_;
   phmap::flat_hash_map<uint64_t, size_type> id_map_;
   AdapterImpl<VertexAdapter> adapter_impl_;
   AdapterImpl<SudoVertexAdapter> sudo_adapter_impl_;

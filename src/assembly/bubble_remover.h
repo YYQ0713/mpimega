@@ -9,6 +9,7 @@
 #include "contig_output.h"
 #include "unitig_graph.h"
 #include "utils/histgram.h"
+#include "mpienv/mpienv.hpp"
 
 class BaseBubbleRemover {
  public:
@@ -31,7 +32,7 @@ class BaseBubbleRemover {
 
  protected:
   size_t PopBubbles(UnitigGraph &graph, bool permanent_rm, uint32_t max_len,
-                    const checker_type &checker);
+                    const checker_type &checker, MPIEnviroment &mpienv);
   int SearchAndPopBubble(UnitigGraph &graph,
                          UnitigGraph::VertexAdapter &adapter, uint32_t max_len,
                          const checker_type &checker);
@@ -39,9 +40,9 @@ class BaseBubbleRemover {
 
 class NaiveBubbleRemover : public BaseBubbleRemover {
  public:
-  size_t PopBubbles(UnitigGraph &graph, bool permanent_rm) {
+  size_t PopBubbles(UnitigGraph &graph, bool permanent_rm ,MPIEnviroment &mpienv) {
     return BaseBubbleRemover::PopBubbles(graph, permanent_rm, graph.k() + 2,
-                                         Check);
+                                         Check, mpienv);
   }
 
  private:
@@ -65,7 +66,7 @@ class ComplexBubbleRemover : public BaseBubbleRemover {
     similarity_ = similarity;
     return *this;
   }
-  size_t PopBubbles(UnitigGraph &graph, bool permanent_rm);
+  size_t PopBubbles(UnitigGraph &graph, bool permanent_rm, MPIEnviroment& mpienv);
 };
 
 #endif  // MEGAHIT_BUBBLE_REMOVER_H

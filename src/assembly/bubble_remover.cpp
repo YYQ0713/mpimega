@@ -135,10 +135,15 @@ int BaseBubbleRemover::SearchAndPopBubble(UnitigGraph &graph,
 
 size_t BaseBubbleRemover::PopBubbles(UnitigGraph &graph, bool permanent_rm,
                                      uint32_t max_len,
-                                     const checker_type &checker) {
+                                     const checker_type &checker, MPIEnviroment &mpienv) {
   uint32_t num_removed = 0;
+  int64_t num_edges_mean = graph.size() / mpienv.nprocs;
+  int64_t remain = graph.size() % mpienv.nprocs;
+  int64_t start_index = mpienv.rank * num_edges_mean + (mpienv.rank < remain ? mpienv.rank : remain);
+  int64_t end_index = start_index + num_edges_mean + (mpienv.rank < remain ? 1 : 0);
+
 #pragma omp parallel for reduction(+ : num_removed)
-  for (UnitigGraph::size_type i = 0; i < graph.size(); ++i) {
+  for (UnitigGraph::size_type i = start_index; i < end_index; ++i) {
     UnitigGraph::VertexAdapter adapter = graph.MakeVertexAdapter(i);
     if (adapter.IsStandalone()) {
       continue;
@@ -147,11 +152,14 @@ size_t BaseBubbleRemover::PopBubbles(UnitigGraph &graph, bool permanent_rm,
       num_removed += SearchAndPopBubble(graph, adapter, max_len, checker);
     }
   }
+  MPI_Allreduce(MPI_IN_PLACE, &num_removed, 1, MPI_UINT32_T, MPI_SUM, MPI_COMM_WORLD);
+  if (num_removed != 0) graph.Mpi_Allreduce_vertices();
+  xinfo("flush bubbles\n");
   graph.Refresh(!permanent_rm);
   return num_removed;
 }
 
-size_t ComplexBubbleRemover::PopBubbles(UnitigGraph &graph, bool permanent_rm) {
+size_t ComplexBubbleRemover::PopBubbles(UnitigGraph &graph, bool permanent_rm, MPIEnviroment &mpienv) {
   uint32_t k = graph.k();
   double sim = similarity_;
   uint32_t max_len = lround(merge_level_ * k / sim);
@@ -166,5 +174,5 @@ size_t ComplexBubbleRemover::PopBubbles(UnitigGraph &graph, bool permanent_rm) {
            GetSimilarity(graph.VertexToDNAString(a), graph.VertexToDNAString(b),
                          sim) >= sim;
   };
-  return BaseBubbleRemover::PopBubbles(graph, permanent_rm, max_len, checker);
+  return BaseBubbleRemover::PopBubbles(graph, permanent_rm, max_len, checker, mpienv);
 }

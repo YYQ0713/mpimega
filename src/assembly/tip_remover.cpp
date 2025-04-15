@@ -49,5 +49,6 @@ uint32_t RemoveTips(UnitigGraph &graph, uint32_t max_tip_len) {
       break;
     }
   }
+  graph.show_info();
   return num_removed;
 }

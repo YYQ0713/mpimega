@@ -18,7 +18,7 @@ namespace kmlib {
  * @details Update of each bit is threads safe via set and get.
  * It can also be used as a vector of bit locks via try_lock, lock and unlock
  */
-template <typename WordType = uint64_t>
+template <typename WordType = unsigned long>
 class AtomicBitVector {
  public:
   using word_type = WordType;

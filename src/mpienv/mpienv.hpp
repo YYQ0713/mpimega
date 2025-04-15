@@ -1,7 +1,7 @@
 #ifndef MPI_ENV_H_
 #define MPI_ENV_H_
 
-#include "mpi.h"
+#include <mpi.h>
 #include "ga.h"
 #include <stdio.h>
 #include <stdlib.h>

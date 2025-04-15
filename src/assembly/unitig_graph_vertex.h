@@ -10,6 +10,7 @@
 #include <atomic>
 #include <cassert>
 #include <cstdint>
+#include "mpienv/mpienv.hpp"
 
 /**
  * store the metadata of a unitig vertex; the vertex is associate with an SDBG
@@ -28,18 +29,19 @@ class UnitigGraphVertex {
         is_changed(false),
         flag(0) {}
 
- private:
+ //private:
+ public:
   struct StrandInfo {
     StrandInfo(uint64_t begin = 0, uint64_t end = 0) : begin(begin), end(end) {}
-    uint64_t begin : 48;
-    uint64_t end : 48;
-  } __attribute__((packed));
+    uint64_t begin;
+    uint64_t end;
+  };
   StrandInfo strand_info[2];
+  uint64_t total_depth;
   uint32_t length;
-  uint64_t total_depth : 52;
-  bool is_looped : 1;
-  bool is_palindrome : 1;
-  bool is_changed : 1;
+  bool is_looped;
+  bool is_palindrome;
+  bool is_changed;
   // status that can be modified by adapter during traversal and must be atomic
   AtomicWrapper<uint8_t> flag;  // bit 0-4: any flag; bit 5: marked as to
                                 // delete; bit 6 & 7: marked as to disconnect
@@ -149,6 +151,6 @@ class UnitigGraphVertex {
   };
 };
 
-static_assert(sizeof(UnitigGraphVertex) <= 40, "");
+static_assert(sizeof(UnitigGraphVertex) <= 48, "");
 
 #endif  // MEGAHIT_UNITIG_GRAPH_VERTEX_H

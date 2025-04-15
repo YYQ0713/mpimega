@@ -289,15 +289,16 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
     xinfo("Tips removal done! Time elapsed(sec): {.3}\n", timer.elapsed());
   }
 
-  /*
   // construct unitig graph
   timer.reset();
   timer.start();
-  UnitigGraph graph(&dbg);
+  UnitigGraph graph(&dbg, mpienv.rank);
   timer.stop();
   xinfo("unitig graph size: {}, time for building: {.3}\n", graph.size(),
-        timer.elapsed());
+  timer.elapsed());
+  //graph.Mpi_Bcast_vertices();
   CalcAndPrintStat(graph);
+  xinfo("sizeof(UnitigGraphVertex): {}\n", sizeof(UnitigGraphVertex));
 
   // set up bubble
   ContigWriter bubble_writer(opt.bubble_file());
@@ -311,8 +312,10 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
     complex_bubble_remover.SetCarefulThreshold(0.2).SetWriter(&bubble_writer);
   }
 
+  /* // mark mark
   // graph cleaning
   for (int round = 1; round <= opt.cleaning_rounds; ++round) {
+    MPI_Barrier(MPI_COMM_WORLD);
     xinfo("Graph cleaning round {}\n", round);
     bool changed = false;
     if (round > 1) {
@@ -327,17 +330,18 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
     if (opt.bubble_level >= 1) {
       timer.reset();
       timer.start();
-      uint32_t num_bubbles = naiver_bubble_remover.PopBubbles(graph, true);
+      uint32_t num_bubbles = naiver_bubble_remover.PopBubbles(graph, true, mpienv);
       timer.stop();
       xinfo("Number of bubbles removed: {}, Time elapsed(sec): {.3}\n",
             num_bubbles, timer.elapsed());
       changed |= num_bubbles > 0;
     }
     // remove complex bubbles
+    MPI_Barrier(MPI_COMM_WORLD);
     if (opt.bubble_level >= 2) {
       timer.reset();
       timer.start();
-      uint32_t num_bubbles = complex_bubble_remover.PopBubbles(graph, true);
+      uint32_t num_bubbles = complex_bubble_remover.PopBubbles(graph, true, mpienv);
       timer.stop();
       xinfo("Number of complex bubbles removed: {}, Time elapsed(sec): {}\n",
             num_bubbles, timer.elapsed());
@@ -345,6 +349,7 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
     }
 
     // disconnect
+    MPI_Barrier(MPI_COMM_WORLD);
     timer.reset();
     timer.start();
     uint32_t num_disconnected =
@@ -355,14 +360,15 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
     changed |= num_disconnected > 0;
 
     // excessive pruning
+    MPI_Barrier(MPI_COMM_WORLD);
     uint32_t num_excessive_pruned = 0;
     if (opt.prune_level >= 3) {
       timer.reset();
       timer.start();
       num_excessive_pruned = RemoveLowDepth(graph, opt.min_depth);
-      num_excessive_pruned += naiver_bubble_remover.PopBubbles(graph, true);
+      num_excessive_pruned += naiver_bubble_remover.PopBubbles(graph, true, mpienv);
       if (opt.bubble_level >= 2 && opt.merge_len > 0) {
-        num_excessive_pruned += complex_bubble_remover.PopBubbles(graph, true);
+        num_excessive_pruned += complex_bubble_remover.PopBubbles(graph, true, mpienv);
       }
       timer.stop();
       xinfo("Unitigs removed in (more-)excessive pruning: {}, time: {.3}\n",
@@ -372,16 +378,19 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
       timer.start();
       RemoveLocalLowDepth(graph, opt.min_depth, opt.max_tip_len,
                           opt.local_width, std::min(opt.low_local_ratio, 0.1),
-                          true, &num_excessive_pruned);
+                          true, &num_excessive_pruned, mpienv.rank);
       timer.stop();
       xinfo("Unitigs removed in excessive pruning: {}, time: {.3}\n",
             num_excessive_pruned, timer.elapsed());
     }
     if (!changed) break;
   }
-
+  
   ContigStat stat = CalcAndPrintStat(graph);
 
+  */ // mark mark
+  
+  /*
   // output contigs
   ContigWriter contig_writer(opt.contig_file());
   ContigWriter standalone_writer(opt.standalone_file());

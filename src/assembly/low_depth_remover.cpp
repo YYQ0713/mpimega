@@ -4,6 +4,7 @@
 
 #include "low_depth_remover.h"
 #include "unitig_graph.h"
+#include "utils/utils.h"
 
 namespace {
 
@@ -38,11 +39,10 @@ double LocalDepth(UnitigGraph &graph, UnitigGraph::VertexAdapter &adapter,
 
 bool RemoveLocalLowDepth(UnitigGraph &graph, double min_depth, uint32_t max_len,
                          uint32_t local_width, double local_ratio,
-                         bool permanent_rm, uint32_t *num_removed) {
+                         bool permanent_rm, uint32_t *num_removed, uint32_t rank) {
   bool need_refresh = false;
   uint32_t removed = 0;
   std::atomic_bool is_changed{false};
-
 #pragma omp parallel for reduction(+ : removed) reduction(|| : need_refresh)
   for (UnitigGraph::size_type i = 0; i < graph.size(); ++i) {
     auto adapter = graph.MakeVertexAdapter(i);
@@ -76,7 +76,7 @@ bool RemoveLocalLowDepth(UnitigGraph &graph, double min_depth, uint32_t max_len,
       }
     }
   }
-
+  
   if (need_refresh) {
     bool set_changed = !permanent_rm;
     graph.Refresh(set_changed);
@@ -87,12 +87,12 @@ bool RemoveLocalLowDepth(UnitigGraph &graph, double min_depth, uint32_t max_len,
 
 uint32_t IterateLocalLowDepth(UnitigGraph &graph, double min_depth,
                               uint32_t min_len, uint32_t local_width,
-                              double local_ratio, bool permanent_rm) {
+                              double local_ratio, uint32_t rank, bool permanent_rm) {
   uint32_t total_removed = 0;
   while (min_depth < kMaxMul) {
     uint32_t num_removed = 0;
     if (!RemoveLocalLowDepth(graph, min_depth, min_len, local_width,
-                             local_ratio, permanent_rm, &num_removed)) {
+                             local_ratio, permanent_rm, &num_removed, rank)) {
       break;
     }
     total_removed += num_removed;

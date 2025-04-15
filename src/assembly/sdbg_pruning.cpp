@@ -58,28 +58,10 @@ double InferMinDepth(SDBG &dbg) {
   return 1;
 }
 
-void to_remove_bor_op(void *a, void *b, int *len, MPI_Datatype *datatype) {
-    
-  AtomicWrapper<uint64_t>* a_ptr = static_cast<AtomicWrapper<uint64_t>*>(a);
-  AtomicWrapper<uint64_t>* b_ptr = static_cast<AtomicWrapper<uint64_t>*>(b);
-  
-  int lenth = *len;
-  
-  for (int i = 0; i < lenth; ++i) {
-    auto a_val = a_ptr[i].v.load(std::memory_order::memory_order_relaxed);
-    auto b_val = b_ptr[i].v.load(std::memory_order::memory_order_relaxed);
-    
-    b_ptr[i].v.store(a_val | b_val);
-  }
-}
-
 int64_t Trim(SDBG &dbg, int len, AtomicBitVector &ignored, MPIEnviroment &mpienv) {
   int64_t number_tips = 0;
   AtomicBitVector to_remove(dbg.size());
   std::vector<uint64_t> path;
-
-  MPI_Op atomic_reduce;
-  MPI_Op_create(to_remove_bor_op, 1, &atomic_reduce);
 
   int64_t num_edges_mean = dbg.size() / mpienv.nprocs;
   int64_t remain = dbg.size() % mpienv.nprocs;
@@ -158,9 +140,16 @@ int64_t Trim(SDBG &dbg, int len, AtomicBitVector &ignored, MPIEnviroment &mpienv
     }
   }
 
+  double start_time, end_time;
+  MPI_Barrier(MPI_COMM_WORLD); // 确保所有进程同步
+  start_time = MPI_Wtime();
   MPI_Allreduce(MPI_IN_PLACE, &number_tips, 1, MPI_LONG_LONG_INT, MPI_SUM, MPI_COMM_WORLD);
-  MPI_Allreduce(MPI_IN_PLACE, to_remove.data_array_.data(), to_remove.data_array_.size(), MPI_UINT64_T, atomic_reduce, MPI_COMM_WORLD);
-  //MPI_Allreduce(MPI_IN_PLACE, ignored.data_array_.data(), ignored.data_array_.size(), MPI_UINT64_T, atomic_reduce, MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE, to_remove.data_array_.data(), to_remove.data_array_.size(), MPI_UNSIGNED_LONG, MPI_BOR, MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE, ignored.data_array_.data(), ignored.data_array_.size(), MPI_UNSIGNED_LONG, MPI_BAND, MPI_COMM_WORLD);
+  end_time = MPI_Wtime();
+
+  double elapsed_time = end_time - start_time;
+  //xinfo("Process {}: MPI_AllReduce took {} seconds\n", mpienv.rank, elapsed_time);
 
 #pragma omp parallel for
   for (uint64_t id = 0; id < dbg.size(); ++id) {
@@ -169,7 +158,6 @@ int64_t Trim(SDBG &dbg, int len, AtomicBitVector &ignored, MPIEnviroment &mpienv
     }
   }
 
-  MPI_Op_free(&atomic_reduce);
   return number_tips;
 }
 
@@ -193,8 +181,7 @@ uint64_t RemoveTips(SDBG &dbg, int max_tip_len, MPIEnviroment &mpienv) {
     number_tips += Trim(dbg, len, ignored, mpienv);
     timer.stop();
     if (mpienv.rank == 0)
-      xinfoc("Accumulated tips removed: {}; time elapsed: {.4}\n", number_tips,
-            timer.elapsed());
+      xinfoc("Accumulated tips removed: {}; time elapsed: {.4}\n", number_tips, timer.elapsed());
   }
 
   if (mpienv.rank == 0)
@@ -204,9 +191,7 @@ uint64_t RemoveTips(SDBG &dbg, int max_tip_len, MPIEnviroment &mpienv) {
   number_tips += Trim(dbg, max_tip_len, ignored, mpienv);
   timer.stop();
   if (mpienv.rank == 0)
-    xinfoc("Accumulated tips removed: {}; time elapsed: {.4}\n", number_tips,
-          timer.elapsed());
-
+    xinfoc("Accumulated tips removed: {}; time elapsed: {.4}\n", number_tips, timer.elapsed());
   return number_tips;
 }
 
