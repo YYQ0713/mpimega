@@ -39,12 +39,16 @@ double LocalDepth(UnitigGraph &graph, UnitigGraph::VertexAdapter &adapter,
 
 bool RemoveLocalLowDepth(UnitigGraph &graph, double min_depth, uint32_t max_len,
                          uint32_t local_width, double local_ratio,
-                         bool permanent_rm, uint32_t *num_removed, uint32_t rank) {
+                         bool permanent_rm, uint32_t *num_removed, MPIEnviroment &mpienv) {
   bool need_refresh = false;
   uint32_t removed = 0;
   std::atomic_bool is_changed{false};
+  int64_t num_edges_mean = graph.size() / mpienv.nprocs;
+  int64_t remain = graph.size() % mpienv.nprocs;
+  int64_t start_index = mpienv.rank * num_edges_mean + (mpienv.rank < remain ? mpienv.rank : remain);
+  int64_t end_index = start_index + num_edges_mean + (mpienv.rank < remain ? 1 : 0);
 #pragma omp parallel for reduction(+ : removed) reduction(|| : need_refresh)
-  for (UnitigGraph::size_type i = 0; i < graph.size(); ++i) {
+  for (UnitigGraph::size_type i = start_index; i < end_index; ++i) {
     auto adapter = graph.MakeVertexAdapter(i);
     if (adapter.IsStandalone() || adapter.GetLength() > max_len) {
       continue;
@@ -76,10 +80,15 @@ bool RemoveLocalLowDepth(UnitigGraph &graph, double min_depth, uint32_t max_len,
       }
     }
   }
+
+  MPI_Allreduce(MPI_IN_PLACE, &removed, 1, MPI_UINT32_T, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE, &need_refresh, 1, MPI_C_BOOL, MPI_LOR, MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE, &is_changed, 1, MPI_C_BOOL, MPI_LOR, MPI_COMM_WORLD);
   
   if (need_refresh) {
+    graph.Mpi_Allreduce_vertices();
     bool set_changed = !permanent_rm;
-    graph.Refresh(set_changed);
+    graph.Refresh(set_changed, mpienv.rank);
   }
   *num_removed = removed;
   return is_changed;
@@ -87,12 +96,12 @@ bool RemoveLocalLowDepth(UnitigGraph &graph, double min_depth, uint32_t max_len,
 
 uint32_t IterateLocalLowDepth(UnitigGraph &graph, double min_depth,
                               uint32_t min_len, uint32_t local_width,
-                              double local_ratio, uint32_t rank, bool permanent_rm) {
+                              double local_ratio, MPIEnviroment &mpienv, bool permanent_rm) {
   uint32_t total_removed = 0;
   while (min_depth < kMaxMul) {
     uint32_t num_removed = 0;
     if (!RemoveLocalLowDepth(graph, min_depth, min_len, local_width,
-                             local_ratio, permanent_rm, &num_removed, rank)) {
+                             local_ratio, permanent_rm, &num_removed, mpienv)) {
       break;
     }
     total_removed += num_removed;

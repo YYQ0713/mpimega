@@ -66,7 +66,7 @@ class ComplexBubbleRemover : public BaseBubbleRemover {
     similarity_ = similarity;
     return *this;
   }
-  size_t PopBubbles(UnitigGraph &graph, bool permanent_rm, MPIEnviroment& mpienv);
+  size_t PopBubbles(UnitigGraph &graph, bool permanent_rm, MPIEnviroment &mpienv);
 };
 
 #endif  // MEGAHIT_BUBBLE_REMOVER_H

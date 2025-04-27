@@ -312,16 +312,14 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
     complex_bubble_remover.SetCarefulThreshold(0.2).SetWriter(&bubble_writer);
   }
 
-  /* // mark mark
   // graph cleaning
   for (int round = 1; round <= opt.cleaning_rounds; ++round) {
-    MPI_Barrier(MPI_COMM_WORLD);
     xinfo("Graph cleaning round {}\n", round);
     bool changed = false;
     if (round > 1) {
       timer.reset();
       timer.start();
-      uint32_t num_tips = RemoveTips(graph, opt.max_tip_len);
+      uint32_t num_tips = RemoveTips(graph, opt.max_tip_len, mpienv);
       changed |= num_tips > 0;
       timer.stop();
       xinfo("Tips removed: {}, time: {.3}\n", num_tips, timer.elapsed());
@@ -336,8 +334,8 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
             num_bubbles, timer.elapsed());
       changed |= num_bubbles > 0;
     }
+    
     // remove complex bubbles
-    MPI_Barrier(MPI_COMM_WORLD);
     if (opt.bubble_level >= 2) {
       timer.reset();
       timer.start();
@@ -347,20 +345,18 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
             num_bubbles, timer.elapsed());
       changed |= num_bubbles > 0;
     }
-
+    
     // disconnect
-    MPI_Barrier(MPI_COMM_WORLD);
     timer.reset();
     timer.start();
     uint32_t num_disconnected =
-        DisconnectWeakLinks(graph, opt.disconnect_ratio);
+        DisconnectWeakLinks(graph, mpienv, opt.disconnect_ratio);
     timer.stop();
-    xinfo("Number unitigs disconnected: {}, time: {.3}\n", num_disconnected,
+    xinfo("Number unitigs disconnected: {} (have redundancy), time: {.3}\n", num_disconnected,
           timer.elapsed());
     changed |= num_disconnected > 0;
-
+    
     // excessive pruning
-    MPI_Barrier(MPI_COMM_WORLD);
     uint32_t num_excessive_pruned = 0;
     if (opt.prune_level >= 3) {
       timer.reset();
@@ -378,7 +374,7 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
       timer.start();
       RemoveLocalLowDepth(graph, opt.min_depth, opt.max_tip_len,
                           opt.local_width, std::min(opt.low_local_ratio, 0.1),
-                          true, &num_excessive_pruned, mpienv.rank);
+                          true, &num_excessive_pruned, mpienv);
       timer.stop();
       xinfo("Unitigs removed in excessive pruning: {}, time: {.3}\n",
             num_excessive_pruned, timer.elapsed());
@@ -387,8 +383,6 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
   }
   
   ContigStat stat = CalcAndPrintStat(graph);
-
-  */ // mark mark
   
   /*
   // output contigs

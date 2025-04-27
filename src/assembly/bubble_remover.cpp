@@ -152,10 +152,10 @@ size_t BaseBubbleRemover::PopBubbles(UnitigGraph &graph, bool permanent_rm,
       num_removed += SearchAndPopBubble(graph, adapter, max_len, checker);
     }
   }
+
   MPI_Allreduce(MPI_IN_PLACE, &num_removed, 1, MPI_UINT32_T, MPI_SUM, MPI_COMM_WORLD);
-  if (num_removed != 0) graph.Mpi_Allreduce_vertices();
-  xinfo("flush bubbles\n");
-  graph.Refresh(!permanent_rm);
+  graph.Mpi_Allreduce_vertices();
+  graph.Refresh(!permanent_rm, mpienv.rank);
   return num_removed;
 }
 

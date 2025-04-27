@@ -344,11 +344,13 @@ void setup_output_dir(Options& opt) {
     if (opt.out_dir.empty()) {
         opt.out_dir = abspath("./megahit_out");
     }
-
-    if (!opt.force_overwrite && !opt.test_mode && fs::exists(opt.out_dir)) {
-        std::cerr << "Output directory " + opt.out_dir +
-                     " already exists, please change the parameter -o to another value to avoid overwriting." << std::endl;
-        exit(1);
+    
+    if (opt.mpienv_.rank == 0) {
+        if (!opt.force_overwrite && !opt.test_mode && fs::exists(opt.out_dir)) {
+            std::cerr << "Output directory " + opt.out_dir +
+            " already exists, please change the parameter -o to another value to avoid overwriting." << std::endl;
+            exit(1);
+        }
     }
 
     if (opt.temp_dir.empty()) {

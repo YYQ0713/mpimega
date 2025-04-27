@@ -122,17 +122,13 @@ UnitigGraph::UnitigGraph(SDBG *sdbg, uint32_t rank)
     }
   }
   vertices_size = vertices_.size();
-}// if (rank == 0)
+} // if (rank == 0)
 
   MPI_Bcast(&vertices_size, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
   if (rank != 0) {
     vertices_.resize(vertices_size);
   }
   UnitigGraph::Mpi_Bcast_vertices();
-
-  xinfo("diff {}\n", vertices_[0].length);
-  xinfo("diff {}\n", vertices_[2000].length);
-  xinfo("diff {}\n", vertices_[4000].length);
 
   if (vertices_.size() >= kMaxNumVertices) {
     xfatal(
@@ -222,9 +218,10 @@ void UnitigGraph::RefreshDisconnected() {
   }
 }
 
-void UnitigGraph::Refresh(bool set_changed) {
+void UnitigGraph::Refresh(bool set_changed, int rank) {
   static const uint8_t kDeleted = 0x1;
   static const uint8_t kVisited = 0x2;
+  size_t vertices_size = 0;
   RefreshDisconnected();
 #pragma omp parallel for
   for (size_type i = 0; i < vertices_.size(); ++i) {
@@ -252,112 +249,121 @@ void UnitigGraph::Refresh(bool set_changed) {
     }
   }
 
-  AtomicBitVector locks(size());
-#pragma omp parallel for
-  for (size_type i = 0; i < vertices_.size(); ++i) {
-    auto adapter = MakeSudoAdapter(i);
-    if (adapter.IsStandalone() || (adapter.GetFlag() & kDeleted)) {
-      continue;
-    }
-    for (int strand = 0; strand < 2; ++strand, adapter.ReverseComplement()) {
-      if (PrevSimplePathAdapter(adapter).IsValid()) {
+  if (rank == 0) {
+    AtomicBitVector locks(size());
+  #pragma omp parallel for
+    for (size_type i = 0; i < vertices_.size(); ++i) {
+      auto adapter = MakeSudoAdapter(i);
+      if (adapter.IsStandalone() || (adapter.GetFlag() & kDeleted)) {
         continue;
       }
-      if (!locks.try_lock(i)) {
-        break;
-      }
-      std::vector<SudoVertexAdapter> linear_path;
-      for (auto cur = NextSimplePathAdapter(adapter); cur.IsValid();
-           cur = NextSimplePathAdapter(cur)) {
-        linear_path.emplace_back(cur);
-      }
+      for (int strand = 0; strand < 2; ++strand, adapter.ReverseComplement()) {
+        if (PrevSimplePathAdapter(adapter).IsValid()) {
+          continue;
+        }
+        if (!locks.try_lock(i)) {
+          break;
+        }
+        std::vector<SudoVertexAdapter> linear_path;
+        for (auto cur = NextSimplePathAdapter(adapter); cur.IsValid();
+            cur = NextSimplePathAdapter(cur)) {
+          linear_path.emplace_back(cur);
+        }
 
-      if (linear_path.empty()) {
+        if (linear_path.empty()) {
+          adapter.SetFlag(kVisited);
+          break;
+        }
+
+        size_type back_id = linear_path.back().UnitigId();
+        if (back_id != i && !locks.try_lock(back_id)) {
+          if (back_id > i) {
+            locks.unlock(i);
+            break;
+          } else {
+            locks.lock(back_id);
+          }
+        }
+
+        auto new_length = adapter.GetLength();
+        auto new_total_depth = adapter.GetTotalDepth();
         adapter.SetFlag(kVisited);
+
+        for (auto &v : linear_path) {
+          new_length += v.GetLength();
+          new_total_depth += v.GetTotalDepth();
+          if (v.canonical_id() != adapter.canonical_id()) v.SetFlag(kDeleted);
+        }
+
+        auto new_start = adapter.b();
+        auto new_rc_end = adapter.re();
+        auto new_rc_start = linear_path.back().rb();
+        auto new_end = linear_path.back().e();
+
+        adapter.SetBeginEnd(new_start, new_end, new_rc_start, new_rc_end);
+        adapter.SetLength(new_length);
+        adapter.SetTotalDepth(new_total_depth);
+        if (set_changed) adapter.SetChanged();
         break;
       }
-
-      size_type back_id = linear_path.back().UnitigId();
-      if (back_id != i && !locks.try_lock(back_id)) {
-        if (back_id > i) {
-          locks.unlock(i);
-          break;
-        } else {
-          locks.lock(back_id);
-        }
-      }
-
-      auto new_length = adapter.GetLength();
-      auto new_total_depth = adapter.GetTotalDepth();
-      adapter.SetFlag(kVisited);
-
-      for (auto &v : linear_path) {
-        new_length += v.GetLength();
-        new_total_depth += v.GetTotalDepth();
-        if (v.canonical_id() != adapter.canonical_id()) v.SetFlag(kDeleted);
-      }
-
-      auto new_start = adapter.b();
-      auto new_rc_end = adapter.re();
-      auto new_rc_start = linear_path.back().rb();
-      auto new_end = linear_path.back().e();
-
-      adapter.SetBeginEnd(new_start, new_end, new_rc_start, new_rc_end);
-      adapter.SetLength(new_length);
-      adapter.SetTotalDepth(new_total_depth);
-      if (set_changed) adapter.SetChanged();
-      break;
     }
-  }
-  // looped path
-  std::mutex mutex;
-#pragma omp parallel for
-  for (size_type i = 0; i < vertices_.size(); ++i) {
-    auto adapter = MakeSudoAdapter(i);
-    if (!adapter.IsStandalone() && !adapter.GetFlag()) {
-      std::lock_guard<std::mutex> lk(mutex);
-      if (adapter.GetFlag()) {
-        continue;
-      }
 
-      uint32_t length = adapter.GetLength();
-      uint64_t total_depth = adapter.GetTotalDepth();
-      SudoVertexAdapter next_adapter = adapter;
-      while (true) {
-        next_adapter = NextSimplePathAdapter(next_adapter);
-        assert(next_adapter.IsValid());
-        if (next_adapter.b() == adapter.b()) {
-          break;
+    // looped path
+    std::mutex mutex;
+  #pragma omp parallel for
+    for (size_type i = 0; i < vertices_.size(); ++i) {
+      auto adapter = MakeSudoAdapter(i);
+      if (!adapter.IsStandalone() && !adapter.GetFlag()) {
+        std::lock_guard<std::mutex> lk(mutex);
+        if (adapter.GetFlag()) {
+          continue;
         }
-        next_adapter.SetFlag(kDeleted);
-        length += next_adapter.GetLength();
-        total_depth += next_adapter.GetTotalDepth();
+
+        uint32_t length = adapter.GetLength();
+        uint64_t total_depth = adapter.GetTotalDepth();
+        SudoVertexAdapter next_adapter = adapter;
+        while (true) {
+          next_adapter = NextSimplePathAdapter(next_adapter);
+          assert(next_adapter.IsValid());
+          if (next_adapter.b() == adapter.b()) {
+            break;
+          }
+          next_adapter.SetFlag(kDeleted);
+          length += next_adapter.GetLength();
+          total_depth += next_adapter.GetTotalDepth();
+        }
+
+        auto new_start = adapter.b();
+        auto new_end = sdbg_->PrevSimplePathEdge(new_start);
+        auto new_rc_end = adapter.re();
+        auto new_rc_start = sdbg_->NextSimplePathEdge(new_rc_end);
+        assert(new_start == sdbg_->EdgeReverseComplement(new_rc_end));
+        assert(new_end == sdbg_->EdgeReverseComplement(new_rc_start));
+
+        adapter.SetBeginEnd(new_start, new_end, new_rc_start, new_rc_end);
+        adapter.SetLength(length);
+        adapter.SetTotalDepth(total_depth);
+        adapter.SetLooped();
+        if (set_changed) adapter.SetChanged();
       }
-
-      auto new_start = adapter.b();
-      auto new_end = sdbg_->PrevSimplePathEdge(new_start);
-      auto new_rc_end = adapter.re();
-      auto new_rc_start = sdbg_->NextSimplePathEdge(new_rc_end);
-      assert(new_start == sdbg_->EdgeReverseComplement(new_rc_end));
-      assert(new_end == sdbg_->EdgeReverseComplement(new_rc_start));
-
-      adapter.SetBeginEnd(new_start, new_end, new_rc_start, new_rc_end);
-      adapter.SetLength(length);
-      adapter.SetTotalDepth(total_depth);
-      adapter.SetLooped();
-      if (set_changed) adapter.SetChanged();
     }
+
+    vertices_.resize(std::remove_if(vertices_.begin(), vertices_.end(),
+                                    [](UnitigGraphVertex &a) {
+                                      return SudoVertexAdapter(a).GetFlag() &
+                                            kDeleted;
+                                    }) - vertices_.begin());
+    
+    vertices_size = vertices_.size();
+  } // rank == 0
+
+  MPI_Bcast(&vertices_size, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+  if (rank != 0) {
+    vertices_.resize(vertices_size);
   }
-  
-  vertices_.resize(std::remove_if(vertices_.begin(), vertices_.end(),
-                                  [](UnitigGraphVertex &a) {
-                                    return SudoVertexAdapter(a).GetFlag() &
-                                           kDeleted;
-                                  }) -
-                   vertices_.begin());
+  UnitigGraph::Mpi_Bcast_vertices();
 
   size_type num_changed = 0;
-  
 #pragma omp parallel for reduction(+ : num_changed)
   for (size_type i = 0; i < vertices_.size(); ++i) {
     auto adapter = MakeSudoAdapter(i);
@@ -447,9 +453,6 @@ void UnitigGraph::Mpi_Allreduce_vertices() {
     MPI_C_BOOL, // is_changed
     MPI_UINT8_T, // flag
   };
-  xinfo("diff {}\n", vertices_[0].length);
-  xinfo("diff {}\n", vertices_[2000].length);
-  xinfo("diff {}\n", vertices_[4000].length);
 
   // 创建自定义 MPI 类型
   MPI_Type_create_struct(kFieldCount, block_lengths, displacements, types, &MPI_vertices);
@@ -501,10 +504,28 @@ void UnitigGraph::Mpi_Bcast_vertices() {
   MPI_Type_free(&MPI_vertices);
 }
 
-void UnitigGraph::show_info() {
-  xinfo("diff {}\n", vertices_[0].length);
-  xinfo("diff {}\n", vertices_[2000].length);
-  xinfo("diff {}\n", vertices_[4000].length);
+void UnitigGraph::show_info(int rank) {
+  std::string filename = std::to_string(rank) + "_output.txt"; // 文件名
+    
+  // 1. 打开文件（"w" 表示写入，覆盖原有内容）
+  FILE* file = fopen(filename.c_str(), "w");
+  if (file == NULL) {
+      perror("Failed to open file");
+      return;
+  }
+
+  for (size_t i = 0; i < vertices_.size(); i++)
+  {
+    fprintf(file, "beginend[%llu]: %llu %llu %llu %llu\n", i, vertices_[i].strand_info[0].begin, vertices_[i].strand_info[0].end, vertices_[i].strand_info[1].begin, vertices_[i].strand_info[1].end);
+    fprintf(file, "length[%llu]: %u\n", i, vertices_[i].length);
+    fprintf(file, "flag[%llu]: %u\n", i, (unsigned int)vertices_[i].flag.v);
+    fprintf(file, "is_changed[%llu]: %u\n", i, (unsigned int)vertices_[i].is_changed);
+    fprintf(file, "is_looped[%llu]: %u\n", i, (unsigned int)vertices_[i].is_looped);
+    fprintf(file, "is_palindrome[%llu]: %u\n", i, (unsigned int)vertices_[i].is_palindrome);
+  }
+
+  // 3. 关闭文件
+  fclose(file);
 }
 
 void UnitigGraph::vertices_resize(uint32_t size) {

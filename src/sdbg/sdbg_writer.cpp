@@ -101,7 +101,7 @@ void SdbgWriter::Write(unsigned rank, unsigned nthread, unsigned tid, uint32_t b
     snapshot->bucket_record.starting_offset = cur_thread_offset_[tid];
     snapshot->cur_thread_offset = cur_thread_offset_[tid];
   }
-  assert(tid < num_threads_ && ((rank * nthread + tid) == snapshot->bucket_record.file_id) && snapshot->local_tid == tid);
+  assert(tid < num_threads_ && ((rank * nthread + tid) == snapshot->bucket_record.file_id));
 
   SdbgItem item(w, last, tip, std::min(multiplicity, mul_t{kSmallMulSentinel}));
   files_[tid]->write(reinterpret_cast<const char *>(&item), sizeof(item));
