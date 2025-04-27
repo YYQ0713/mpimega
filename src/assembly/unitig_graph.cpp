@@ -357,12 +357,21 @@ void UnitigGraph::Refresh(bool set_changed, int rank) {
     vertices_size = vertices_.size();
   } // rank == 0
 
+  double start_time = 0.0, end_time = 0.0;
+  if (rank == 0) {
+      start_time = MPI_Wtime();  // 记录开始时间（仅 Rank 0）
+  }
+
   MPI_Bcast(&vertices_size, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
   if (rank != 0) {
     vertices_.resize(vertices_size);
   }
   UnitigGraph::Mpi_Bcast_vertices();
 
+  if (rank == 0) {
+      end_time = MPI_Wtime();  // 记录结束时间（仅 Rank 0）
+      xinfo("MPI Mpi_Bcast_vertices Elapsed time: {}\n", (end_time - start_time));
+  }
   size_type num_changed = 0;
 #pragma omp parallel for reduction(+ : num_changed)
   for (size_type i = 0; i < vertices_.size(); ++i) {
@@ -499,7 +508,6 @@ void UnitigGraph::Mpi_Bcast_vertices() {
   MPI_Type_commit(&MPI_vertices);
 
   MPI_Bcast(vertices_.data(), vertices_.size(), MPI_vertices, 0, MPI_COMM_WORLD);
-  //MPI_Allreduce(MPI_IN_PLACE, ignored.data_array_.data(), ignored.data_array_.size(), MPI_UNSIGNED_LONG, MPI_BAND, MPI_COMM_WORLD);
 
   MPI_Type_free(&MPI_vertices);
 }
