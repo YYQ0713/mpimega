@@ -137,8 +137,12 @@ size_t BaseBubbleRemover::PopBubbles(UnitigGraph &graph, bool permanent_rm,
                                      uint32_t max_len,
                                      const checker_type &checker, MPIEnviroment &mpienv) {
   uint32_t num_removed = 0;
+  
+  //计算待处理数据数量和进程数的商
   int64_t num_edges_mean = graph.size() / mpienv.nprocs;
-  int64_t remain = graph.size() % mpienv.nprocs;
+  //计算待处理数据数量和进程数的余数
+  int64_t remain = graph.size() % mpienv.nprocs;         
+  //每个进程计算自己所要处理的数据对应索引起止范围
   int64_t start_index = mpienv.rank * num_edges_mean + (mpienv.rank < remain ? mpienv.rank : remain);
   int64_t end_index = start_index + num_edges_mean + (mpienv.rank < remain ? 1 : 0);
 
