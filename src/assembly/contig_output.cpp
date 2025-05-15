@@ -6,6 +6,7 @@
 #include <cassert>
 #include "definitions.h"
 #include "unitig_graph.h"
+#include <omp.h>
 
 namespace {
 
@@ -116,5 +117,86 @@ void OutputContigs(UnitigGraph &graph, ContigWriter *contig_writer,
       }
       out_file->WriteContig(ascii_contig, graph.k(), i, flag, multi);
     }
+  }
+}
+
+void MPIOutputContigs(UnitigGraph &graph, MPIContigWriter *contig_writer,
+                   MPIContigWriter *final_contig_writer, bool change_only,
+                   uint32_t min_standalone, MPIEnviroment &mpienv) {
+  assert(!(change_only && final_contig_writer != nullptr));  // if output
+                                                             // changed contigs,
+                                                             // must not output
+                                                             // final contigs
+
+
+  int64_t num_edges_mean = graph.size() / mpienv.nprocs;
+  int64_t remain = graph.size() % mpienv.nprocs;
+  int64_t start_index = mpienv.rank * num_edges_mean + (mpienv.rank < remain ? mpienv.rank : remain);
+  int64_t end_index = start_index + num_edges_mean + (mpienv.rank < remain ? 1 : 0);
+#pragma omp parallel for
+  for (UnitigGraph::size_type i = start_index; i < end_index; ++i) {
+    auto adapter = graph.MakeVertexAdapter(i);
+    double multi = change_only ? 1
+                               : std::min(static_cast<double>(kMaxMul),
+                                          adapter.GetAvgDepth());
+    std::string ascii_contig = graph.VertexToDNAString(adapter);
+    if (change_only && !adapter.IsChanged()) {
+      continue;
+    }
+
+    if (adapter.IsLoop()) {
+      int flag = contig_flag::kLoop | contig_flag::kStandalone;
+      auto writer = contig_writer;
+
+      if (adapter.IsPalindrome()) {
+        FoldPalindrome(ascii_contig, graph.k(), adapter.IsLoop());
+        flag = contig_flag::kStandalone;
+      }
+
+      if (final_contig_writer != nullptr) {
+        if (ascii_contig.length() < min_standalone) {
+          continue;
+        } else {
+          writer = final_contig_writer;
+        }
+      }
+      writer->WriteContig(ascii_contig, graph.k(), i, flag, multi);
+    } else {
+      auto out_file = contig_writer;
+      int flag = 0;
+
+      if (adapter.IsStandalone() ||
+          (graph.InDegree(adapter) == 0 && graph.OutDegree(adapter) == 0)) {
+        if (adapter.IsPalindrome()) {
+          FoldPalindrome(ascii_contig, graph.k(), adapter.IsLoop());
+        }
+        flag = contig_flag::kStandalone;
+        if (final_contig_writer != nullptr) {
+          if (ascii_contig.length() < min_standalone) {
+            continue;
+          } else {
+            out_file = final_contig_writer;
+          }
+        }
+      }
+      out_file->WriteContig(ascii_contig, graph.k(), i, flag, multi);
+    }
+
+    // 仅主线程检查并刷新 buffer
+    if (omp_get_thread_num() == 0 && contig_writer->check_buf()) {
+      if (final_contig_writer != nullptr) {
+        final_contig_writer->MPIFileWrite();
+      } else {
+        contig_writer->MPIFileWrite();
+      }
+    }
+  }
+  
+  if (final_contig_writer != nullptr) {
+    final_contig_writer->MPIFileWrite();
+    final_contig_writer->allreduce();
+  } else {
+    contig_writer->MPIFileWrite();
+    contig_writer->allreduce();
   }
 }

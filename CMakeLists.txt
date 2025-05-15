@@ -7,6 +7,8 @@ include_directories(thirdparty/ga-5.8.2/global/src)
 include_directories(thirdparty/ga-5.8.2/ma)
 include_directories(${CMAKE_BINARY_DIR}/thirdparty/ga-5.8.2/gaf2c)
 
+add_subdirectory(thirdparty/fmt-11.2.0)
+
 set(CMAKE_C_COMPILER mpicc)
 set(CMAKE_CXX_COMPILER mpicxx)
 
@@ -88,19 +90,22 @@ target_link_libraries(mpimeta_core
 		ga++
 		m
 		armci
-		comex)
+		comex
+		fmt::fmt)
 target_link_libraries(mpimeta_core_popcnt 
 		ga
 		ga++
 		m
 		armci
-		comex)
+		comex
+		fmt::fmt)
 target_link_libraries(mpimeta_core_no_hw_accel 
 		ga
 		ga++
 		armci
 		m
-		comex)
+		comex
+		fmt::fmt)
 
 add_custom_target(
         mpimeta ALL

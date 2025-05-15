@@ -384,38 +384,42 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
   
   ContigStat stat = CalcAndPrintStat(graph);
   
-  /*
   // output contigs
-  ContigWriter contig_writer(opt.contig_file());
-  ContigWriter standalone_writer(opt.standalone_file());
+  //ContigWriter contig_writer(opt.contig_file());
+  MPIContigWriter mpi_contig_writer(opt.contig_file(), mpienv.rank);
+  //ContigWriter standalone_writer(opt.standalone_file());
+  MPIContigWriter mpi_standalone_writer(opt.standalone_file(), mpienv.rank);
 
   if (!(opt.is_final_round &&
         opt.prune_level >=
             1)) {  // otherwise output after local low depth pruning
     timer.reset();
     timer.start();
-
-    OutputContigs(graph, &contig_writer,
-                  opt.output_standalone ? &standalone_writer : nullptr, false,
-                  opt.min_standalone);
+    //OutputContigs(graph, &contig_writer,
+    //              opt.output_standalone ? &standalone_writer : nullptr, false,
+    //              opt.min_standalone);
+    MPIOutputContigs(graph, &mpi_contig_writer,
+                  opt.output_standalone ? &mpi_standalone_writer : nullptr, false,
+                  opt.min_standalone, mpienv);
     timer.stop();
     xinfo("Time to output: {}\n", timer.elapsed());
   }
 
   // remove local low depth & output as contigs
   if (opt.prune_level >= 1) {
-    ContigWriter addi_contig_writer(opt.addi_contig_file());
+    //ContigWriter addi_contig_writer(opt.addi_contig_file());
+    MPIContigWriter mpi_addi_contig_writer(opt.addi_contig_file(), mpienv.rank);
 
     timer.reset();
     timer.start();
     uint32_t num_removed = IterateLocalLowDepth(
         graph, opt.min_depth, opt.max_tip_len, opt.local_width,
-        opt.low_local_ratio, opt.is_final_round);
+        opt.low_local_ratio, mpienv, opt.is_final_round);
 
     uint32_t n_bubbles = 0;
     if (opt.bubble_level >= 2 && opt.merge_len > 0) {
       complex_bubble_remover.SetWriter(nullptr);
-      n_bubbles = complex_bubble_remover.PopBubbles(graph, false);
+      n_bubbles = complex_bubble_remover.PopBubbles(graph, false, mpienv);
       timer.stop();
     }
     xinfo(
@@ -425,16 +429,19 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
     CalcAndPrintStat(graph);
 
     if (!opt.is_final_round) {
-      OutputContigs(graph, &addi_contig_writer, nullptr, true, 0);
+      //OutputContigs(graph, &addi_contig_writer, nullptr, true, 0);
+      MPIOutputContigs(graph, &mpi_addi_contig_writer, nullptr, true, 0, mpienv);
     } else {
-      OutputContigs(graph, &contig_writer,
-                    opt.output_standalone ? &standalone_writer : nullptr, false,
-                    opt.min_standalone);
+      //OutputContigs(graph, &contig_writer,
+      //              opt.output_standalone ? &standalone_writer : nullptr, false,
+      //              opt.min_standalone);
+      MPIOutputContigs(graph, &mpi_contig_writer,
+                    opt.output_standalone ? &mpi_standalone_writer : nullptr, false,
+                    opt.min_standalone, mpienv);
     }
 
     auto stat_changed = CalcAndPrintStat(graph, false, true);
   }
-  */
 
   return 0;
 }
