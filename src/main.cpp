@@ -25,7 +25,7 @@
 #include "utils/utils.h"
 
 int main_assemble(int argc, char **argv, MPIEnviroment &mpienv);
-int main_local(int argc, char **argv);
+int main_local(int argc, char **argv, MPIEnviroment &mpienv);
 int main_iterate(int argc, char **argv);
 int main_build_lib(int argc, char **argv, MPIEnviroment &mpienv);
 
@@ -997,6 +997,22 @@ void assemble(Options& opt, int cur_k) {
     }
 }
 
+void local_assemble(Options& opt, int cur_k, int kmer_to) {
+
+    std::vector<std::string> args_la = {"local" , "-c", contig_prefix(opt.contig_dir(), cur_k) + ".contigs.fa"
+                                                , "-l", opt.read_lib_path()
+                                                , "-t", std::to_string(opt.num_cpu_threads)
+                                                , "-o", contig_prefix(opt.contig_dir(), cur_k) + ".local.fa"
+                                                , "--kmax", std::to_string(kmer_to)};
+    
+    std::vector<const char*> la_args;
+    for (const auto& arg : args_la) {
+        la_args.push_back(arg.c_str());
+    }
+
+    main_local(la_args.size(), const_cast<char**>(la_args.data()), opt.mpienv_);
+}
+
 int main(int argc, char **argv) {
     Options opt;
     opt.mpienv_.init(argc, argv);
@@ -1019,6 +1035,22 @@ int main(int argc, char **argv) {
     MPI_Barrier(MPI_COMM_WORLD); // Barrier
     assemble(opt, opt.k_min);
 
+    int cur_k = opt.k_min;
+    int next_k_idx = 0;
+
+    //while (cur_k < opt.k_max) {
+        int next_k, k_step;
+        next_k_idx += 1;
+        next_k = opt.k_list[next_k_idx];
+        k_step = next_k - cur_k;
+
+        if (!opt.no_local) {
+            local_assemble(opt, cur_k, next_k);
+        }
+        
+
+    //}
+    
     opt.mpienv_.finalize();
     return 0;
 }

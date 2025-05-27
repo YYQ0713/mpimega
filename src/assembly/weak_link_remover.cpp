@@ -39,6 +39,6 @@ uint32_t DisconnectWeakLinks(UnitigGraph &graph, MPIEnviroment &mpienv, double l
   }
   MPI_Allreduce(MPI_IN_PLACE, &num_disconnected, 1, MPI_UINT32_T, MPI_SUM, MPI_COMM_WORLD);
   graph.Mpi_Allreduce_vertices();
-  graph.Refresh(false, mpienv.rank);
+  graph.MPIRefresh(false, mpienv.rank);
   return num_disconnected;
 }

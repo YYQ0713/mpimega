@@ -29,11 +29,13 @@ class UnitigGraph {
   size_t k() const { return sdbg_->k(); }
 
  public:
-  void Refresh(bool mark_changed = false, int rank = -1);
+  void Refresh(bool mark_changed = false);
+  void MPIRefresh(bool mark_changed = false, int rank = -1);
   void Mpi_Allreduce_vertices();
   void Mpi_Bcast_vertices();
   void show_info(int rank);
-  void vertices_resize(uint32_t size);
+  void vertices_resize(size_t size);
+  size_t vertices_size();
   std::string VertexToDNAString(VertexAdapter adapter);
 
  public:

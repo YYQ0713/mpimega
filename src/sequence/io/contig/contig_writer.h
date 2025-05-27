@@ -109,8 +109,16 @@ class MPIContigWriter {
   void WriteLocalContig(const std::string &ascii_contig,
                         int64_t origin_contig_id, int strand,
                         int64_t contig_id) {
-    pfprintf(file_, ">lc_{}_strand_{}_id_{} flag=0 multi=1\n{s}\n",
-             origin_contig_id, strand, contig_id, ascii_contig.c_str());
+    {
+      std::lock_guard<std::mutex> lock(buffer_mutex);
+      // 直接格式化并追加（避免临时 string）
+      fmt::format_to(
+          std::back_inserter(write_buffer),  // 直接追加到 combined_data
+          ">lc_{}_strand_{}_id_{} flag=0 multi=1\n{}\n",
+          origin_contig_id, strand, contig_id, ascii_contig);
+    }
+    //pfprintf(file_, ">lc_{}_strand_{}_id_{} flag=0 multi=1\n{s}\n",
+    //         origin_contig_id, strand, contig_id, ascii_contig.c_str());
     n_contigs_.fetch_add(1, std::memory_order_relaxed);
     n_bases_.fetch_add(ascii_contig.length(), std::memory_order_relaxed);
   }

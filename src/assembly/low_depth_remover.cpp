@@ -88,7 +88,7 @@ bool RemoveLocalLowDepth(UnitigGraph &graph, double min_depth, uint32_t max_len,
   if (need_refresh) {
     graph.Mpi_Allreduce_vertices();
     bool set_changed = !permanent_rm;
-    graph.Refresh(set_changed, mpienv.rank);
+    graph.MPIRefresh(set_changed, mpienv.rank);
   }
   *num_removed = removed;
   return is_changed;

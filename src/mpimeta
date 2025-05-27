@@ -1004,35 +1004,35 @@ def main(argv=None):
         build_first_graph()
         assemble(opt.k_min)
 
-        #cur_k = opt.k_min
-        #next_k_idx = 0
+        cur_k = opt.k_min
+        next_k_idx = 0
 
-        #try:
-        #    while cur_k < opt.k_max:
-        #        next_k_idx += 1
-        #        next_k = opt.k_list[next_k_idx]
-        #        k_step = next_k - cur_k
+        try:
+            while cur_k < opt.k_max:
+                next_k_idx += 1
+                next_k = opt.k_list[next_k_idx]
+                k_step = next_k - cur_k
 
-        #        if not opt.no_local:
-        #            local_assemble(cur_k, next_k)
+                if not opt.no_local:
+                    local_assemble(cur_k, next_k)
 
-        #        iterate(cur_k, k_step)
-        #        build_graph(next_k, cur_k)
+                iterate(cur_k, k_step)
+                build_graph(next_k, cur_k)
 
-        #        assemble(next_k)
-        #        cur_k = next_k
-        #    merge_final(opt.k_max)
+                assemble(next_k)
+                cur_k = next_k
+            merge_final(opt.k_max)
 
-        #except EarlyTerminate as et:
-        #    merge_final(et.kmer_size)
+        except EarlyTerminate as et:
+            merge_final(et.kmer_size)
 
-        #if not opt.keep_tmp_files and os.path.exists(opt.temp_dir):
-        #    shutil.rmtree(opt.temp_dir)
+        if not opt.keep_tmp_files and os.path.exists(opt.temp_dir):
+            shutil.rmtree(opt.temp_dir)
 
-        #open(os.path.join(opt.out_dir, 'done'), 'w').close()
+        open(os.path.join(opt.out_dir, 'done'), 'w').close()
 
-        #if not opt.keep_tmp_files and opt.test_mode:
-        #    shutil.rmtree(opt.out_dir)
+        if not opt.keep_tmp_files and opt.test_mode:
+            shutil.rmtree(opt.out_dir)
 
         logger.info('ALL DONE. Time elapsed: %f seconds ' % (time.time() - start_time))
 

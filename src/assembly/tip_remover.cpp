@@ -50,7 +50,7 @@ uint32_t RemoveTips(UnitigGraph &graph, uint32_t max_tip_len, MPIEnviroment &mpi
     
     MPI_Allreduce(MPI_IN_PLACE, &num_removed, 1, MPI_UINT32_T, MPI_SUM, MPI_COMM_WORLD);
     graph.Mpi_Allreduce_vertices();
-    graph.Refresh(false, mpienv.rank);
+    graph.MPIRefresh(false, mpienv.rank);
     if (thre >= max_tip_len) {
       break;
     }

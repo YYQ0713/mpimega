@@ -253,6 +253,7 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
   ParseAsmOption(argc, argv, opt);
   SDBG dbg;
   SimpleTimer timer;
+  size_t vtx_size;
 
   // graph loading
   timer.reset();
@@ -313,75 +314,85 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
   }
 
   // graph cleaning
-  for (int round = 1; round <= opt.cleaning_rounds; ++round) {
-    xinfo("Graph cleaning round {}\n", round);
-    bool changed = false;
-    if (round > 1) {
-      timer.reset();
-      timer.start();
-      uint32_t num_tips = RemoveTips(graph, opt.max_tip_len, mpienv);
-      changed |= num_tips > 0;
-      timer.stop();
-      xinfo("Tips removed: {}, time: {.3}\n", num_tips, timer.elapsed());
-    }
-    // remove bubbles
-    if (opt.bubble_level >= 1) {
-      timer.reset();
-      timer.start();
-      uint32_t num_bubbles = naiver_bubble_remover.PopBubbles(graph, true, mpienv);
-      timer.stop();
-      xinfo("Number of bubbles removed: {}, Time elapsed(sec): {.3}\n",
-            num_bubbles, timer.elapsed());
-      changed |= num_bubbles > 0;
-    }
-    
-    // remove complex bubbles
-    if (opt.bubble_level >= 2) {
-      timer.reset();
-      timer.start();
-      uint32_t num_bubbles = complex_bubble_remover.PopBubbles(graph, true, mpienv);
-      timer.stop();
-      xinfo("Number of complex bubbles removed: {}, Time elapsed(sec): {}\n",
-            num_bubbles, timer.elapsed());
-      changed |= num_bubbles > 0;
-    }
-    
-    // disconnect
-    timer.reset();
-    timer.start();
-    uint32_t num_disconnected =
-        DisconnectWeakLinks(graph, mpienv, opt.disconnect_ratio);
-    timer.stop();
-    xinfo("Number unitigs disconnected: {} (have redundancy), time: {.3}\n", num_disconnected,
-          timer.elapsed());
-    changed |= num_disconnected > 0;
-    
-    // excessive pruning
-    uint32_t num_excessive_pruned = 0;
-    if (opt.prune_level >= 3) {
-      timer.reset();
-      timer.start();
-      num_excessive_pruned = RemoveLowDepth(graph, opt.min_depth);
-      num_excessive_pruned += naiver_bubble_remover.PopBubbles(graph, true, mpienv);
-      if (opt.bubble_level >= 2 && opt.merge_len > 0) {
-        num_excessive_pruned += complex_bubble_remover.PopBubbles(graph, true, mpienv);
+  //if (mpienv.rank == 0) {
+    for (int round = 1; round <= opt.cleaning_rounds; ++round) {
+      xinfo("Graph cleaning round {}\n", round);
+      bool changed = false;
+      if (round > 1) {
+        timer.reset();
+        timer.start();
+        uint32_t num_tips = RemoveTips(graph, opt.max_tip_len, mpienv);
+        changed |= num_tips > 0;
+        timer.stop();
+        xinfo("Tips removed: {}, time: {.3}\n", num_tips, timer.elapsed());
       }
-      timer.stop();
-      xinfo("Unitigs removed in (more-)excessive pruning: {}, time: {.3}\n",
-            num_excessive_pruned, timer.elapsed());
-    } else if (opt.prune_level >= 2) {
+      // remove bubbles
+      if (opt.bubble_level >= 1) {
+        timer.reset();
+        timer.start();
+        uint32_t num_bubbles = naiver_bubble_remover.PopBubbles(graph, true, mpienv);
+        timer.stop();
+        xinfo("Number of bubbles removed: {}, Time elapsed(sec): {.3}\n",
+              num_bubbles, timer.elapsed());
+        changed |= num_bubbles > 0;
+      }
+      
+      // remove complex bubbles
+      if (opt.bubble_level >= 2) {
+        timer.reset();
+        timer.start();
+        uint32_t num_bubbles = complex_bubble_remover.PopBubbles(graph, true, mpienv);
+        timer.stop();
+        xinfo("Number of complex bubbles removed: {}, Time elapsed(sec): {}\n",
+              num_bubbles, timer.elapsed());
+        changed |= num_bubbles > 0;
+      }
+      
+      // disconnect
       timer.reset();
       timer.start();
-      RemoveLocalLowDepth(graph, opt.min_depth, opt.max_tip_len,
-                          opt.local_width, std::min(opt.low_local_ratio, 0.1),
-                          true, &num_excessive_pruned, mpienv);
+      uint32_t num_disconnected =
+          DisconnectWeakLinks(graph, mpienv, opt.disconnect_ratio);
       timer.stop();
-      xinfo("Unitigs removed in excessive pruning: {}, time: {.3}\n",
-            num_excessive_pruned, timer.elapsed());
+      xinfo("Number unitigs disconnected: {} (have redundancy), time: {.3}\n", num_disconnected,
+            timer.elapsed());
+      changed |= num_disconnected > 0;
+      
+      // excessive pruning
+      uint32_t num_excessive_pruned = 0;
+      if (opt.prune_level >= 3) {
+        timer.reset();
+        timer.start();
+        num_excessive_pruned = RemoveLowDepth(graph, opt.min_depth);
+        num_excessive_pruned += naiver_bubble_remover.PopBubbles(graph, true, mpienv);
+        if (opt.bubble_level >= 2 && opt.merge_len > 0) {
+          num_excessive_pruned += complex_bubble_remover.PopBubbles(graph, true, mpienv);
+        }
+        timer.stop();
+        xinfo("Unitigs removed in (more-)excessive pruning: {}, time: {.3}\n",
+              num_excessive_pruned, timer.elapsed());
+      } else if (opt.prune_level >= 2) {
+        timer.reset();
+        timer.start();
+        RemoveLocalLowDepth(graph, opt.min_depth, opt.max_tip_len,
+                            opt.local_width, std::min(opt.low_local_ratio, 0.1),
+                            true, &num_excessive_pruned, mpienv);
+        timer.stop();
+        xinfo("Unitigs removed in excessive pruning: {}, time: {.3}\n",
+              num_excessive_pruned, timer.elapsed());
+      }
+      if (!changed) break;
     }
-    if (!changed) break;
-  }
-  
+
+    //vtx_size = graph.vertices_size();
+  //} //rank == 0
+
+  //MPI_Bcast(&vtx_size, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+  //if (mpienv.rank != 0) {
+  //  graph.vertices_resize(vtx_size);
+  //}
+  //graph.Mpi_Bcast_vertices();
+
   ContigStat stat = CalcAndPrintStat(graph);
   
   // output contigs
@@ -409,25 +420,39 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
   if (opt.prune_level >= 1) {
     //ContigWriter addi_contig_writer(opt.addi_contig_file());
     MPIContigWriter mpi_addi_contig_writer(opt.addi_contig_file(), mpienv.rank);
+    //if (mpienv.rank == 0) {
+      timer.reset();
+      timer.start();
+      uint32_t num_removed = IterateLocalLowDepth(
+          graph, opt.min_depth, opt.max_tip_len, opt.local_width,
+          opt.low_local_ratio, mpienv, opt.is_final_round);
+
+      uint32_t n_bubbles = 0;
+      if (opt.bubble_level >= 2 && opt.merge_len > 0) {
+        complex_bubble_remover.SetWriter(nullptr);
+        n_bubbles = complex_bubble_remover.PopBubbles(graph, false, mpienv);
+        timer.stop();
+      }
+      xinfo(
+          "Number of local low depth unitigs removed: {}, complex bubbles "
+          "removed: {}, time: {}\n",
+          num_removed, n_bubbles, timer.elapsed());
+      CalcAndPrintStat(graph);
+      //vtx_size = graph.vertices_size();
+    //}
+
+    //timer.reset();
+    //timer.start();
+    //MPI_Bcast(&vtx_size, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+    //if (mpienv.rank != 0) {
+    //  graph.vertices_resize(vtx_size);
+    //}
+    //graph.Mpi_Bcast_vertices();
+    //timer.stop();
+    //xinfo("Time to MPI communication after local low depth unitigs removed: {}\n", timer.elapsed());
 
     timer.reset();
     timer.start();
-    uint32_t num_removed = IterateLocalLowDepth(
-        graph, opt.min_depth, opt.max_tip_len, opt.local_width,
-        opt.low_local_ratio, mpienv, opt.is_final_round);
-
-    uint32_t n_bubbles = 0;
-    if (opt.bubble_level >= 2 && opt.merge_len > 0) {
-      complex_bubble_remover.SetWriter(nullptr);
-      n_bubbles = complex_bubble_remover.PopBubbles(graph, false, mpienv);
-      timer.stop();
-    }
-    xinfo(
-        "Number of local low depth unitigs removed: {}, complex bubbles "
-        "removed: {}, time: {}\n",
-        num_removed, n_bubbles, timer.elapsed());
-    CalcAndPrintStat(graph);
-
     if (!opt.is_final_round) {
       //OutputContigs(graph, &addi_contig_writer, nullptr, true, 0);
       MPIOutputContigs(graph, &mpi_addi_contig_writer, nullptr, true, 0, mpienv);
@@ -439,7 +464,8 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
                     opt.output_standalone ? &mpi_standalone_writer : nullptr, false,
                     opt.min_standalone, mpienv);
     }
-
+    timer.stop();
+    xinfo("Time to output after local low depth unitigs removed: {}\n", timer.elapsed());
     auto stat_changed = CalcAndPrintStat(graph, false, true);
   }
 

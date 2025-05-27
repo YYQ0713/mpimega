@@ -29,12 +29,15 @@ FILE(GLOB_RECURSE SDBG_SOURCE "src/sdbg/*.cpp")
 FILE(GLOB_RECURSE CX1_SOURCE "src/sorting/*.cpp")
 FILE(GLOB_RECURSE SEQ_SOURCE "src/sequence/*.cpp")
 FILE(GLOB_RECURSE MPI_SOURCE "src/mpienv/*.cpp")
+FILE(GLOB_RECURSE LCASM_SOURCE "src/localasm/*.cpp")
+FILE(GLOB_RECURSE IDBA_SOURCE "src/idba/*.cpp")
 
 LIST(APPEND OTHER_SOURCE
 		src/main_assemble.cpp
         src/main.cpp
         src/main_buildlib.cpp
         src/main_sdbg_build.cpp
+		src/main_local_assemble.cpp
         src/utils/options_description.cpp
         )
 
@@ -74,9 +77,9 @@ endif (TSAN)
 
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}: ${CMAKE_CXX_FLAGS}")
 
-add_executable(mpimeta_core ${OTHER_SOURCE} ${SDBG_SOURCE} ${SEQ_SOURCE} ${CX1_SOURCE} ${MPI_SOURCE} ${ASMBL_SOURCE})
-add_executable(mpimeta_core_popcnt ${OTHER_SOURCE} ${SDBG_SOURCE} ${SEQ_SOURCE} ${CX1_SOURCE} ${MPI_SOURCE} ${ASMBL_SOURCE})
-add_executable(mpimeta_core_no_hw_accel ${OTHER_SOURCE} ${SDBG_SOURCE} ${SEQ_SOURCE} ${CX1_SOURCE} ${MPI_SOURCE} ${ASMBL_SOURCE})
+add_executable(mpimeta_core ${OTHER_SOURCE} ${SDBG_SOURCE} ${SEQ_SOURCE} ${CX1_SOURCE} ${MPI_SOURCE} ${ASMBL_SOURCE} ${LCASM_SOURCE} ${IDBA_SOURCE})
+add_executable(mpimeta_core_popcnt ${OTHER_SOURCE} ${SDBG_SOURCE} ${SEQ_SOURCE} ${CX1_SOURCE} ${MPI_SOURCE} ${ASMBL_SOURCE} ${LCASM_SOURCE} ${IDBA_SOURCE})
+add_executable(mpimeta_core_no_hw_accel ${OTHER_SOURCE} ${SDBG_SOURCE} ${SEQ_SOURCE} ${CX1_SOURCE} ${MPI_SOURCE} ${ASMBL_SOURCE} ${LCASM_SOURCE} ${IDBA_SOURCE})
 
 set_target_properties(mpimeta_core PROPERTIES COMPILE_FLAGS "-mbmi2 -DUSE_BMI2 -mpopcnt")
 set_target_properties(mpimeta_core_popcnt PROPERTIES COMPILE_FLAGS "-mpopcnt")
