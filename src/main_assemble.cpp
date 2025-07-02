@@ -151,82 +151,82 @@ void ParseAsmOption(int argc, char **argv, AsmOptions &opt) {
   for (int i = 1; i < argc; ++i) {
     std::string option = argv[i];
     if (option == "-s" || option == "--sdbg_name") {
-      if (i + 1 < argc) {
+      if (i + 1 <= argc) {
         opt.sdbg_name = argv[++i];
       }
     }
     else if (option == "-o" || option == "--output_prefix") {
-      if (i + 1 < argc) {
+      if (i + 1 <= argc) {
         opt.output_prefix = argv[++i];
       }
     }
     else if (option == "-t" || option == "--num_cpu_threads") {
-      if (i + 1 < argc) {
+      if (i + 1 <= argc) {
         opt.num_cpu_threads = std::stoi(argv[++i]);
       }
     }
     else if (option == "--max_tip_len") {
-      if (i + 1 < argc) {
+      if (i + 1 <= argc) {
         opt.max_tip_len = std::stoi(argv[++i]);
       }
     }
     else if (option == "--min_standalone") {
-      if (i + 1 < argc) {
+      if (i + 1 <= argc) {
         opt.min_standalone = std::stoi(argv[++i]);
       }
     }
     else if (option == "--bubble_level") {
-      if (i + 1 < argc) {
+      if (i + 1 <= argc) {
         opt.bubble_level = std::stoi(argv[++i]);
       }
     }
     else if (option == "--merge_len") {
-      if (i + 1 < argc) {
+      if (i + 1 <= argc) {
         opt.merge_len = std::stoi(argv[++i]);
       }
     }
     else if (option == "--merge_similar") {
-      if (i + 1 < argc) {
+      if (i + 1 <= argc) {
         opt.merge_similar = std::stod(argv[++i]);
       }
     }
     else if (option == "--prune_level") {
-      if (i + 1 < argc) {
+      if (i + 1 <= argc) {
         opt.prune_level = std::stoi(argv[++i]);
       }
     }
     else if (option == "--disconnect_ratio") {
-      if (i + 1 < argc) {
+      if (i + 1 <= argc) {
         opt.disconnect_ratio = std::stod(argv[++i]);
       }
     }
     else if (option == "--low_local_ratio") {
-      if (i + 1 < argc) {
+      if (i + 1 <= argc) {
         opt.low_local_ratio = std::stod(argv[++i]);
       }
     }
     else if (option == "--cleaning_rounds") {
-      if (i + 1 < argc) {
+      if (i + 1 <= argc) {
         opt.cleaning_rounds = std::stoi(argv[++i]);
       }
     }
     else if (option == "--min_depth") {
-      if (i + 1 < argc) {
+      if (i + 1 <= argc) {
         opt.min_depth = std::stod(argv[++i]);
       }
     }
     else if (option == "--is_final_round") {
-      if (i + 1 < argc) {
+      if (i + 1 <= argc) {
         opt.is_final_round = true;
       }
     }
     else if (option == "--output_standalone") {
-      if (i + 1 < argc) {
+      if (i + 1 <= argc) {
         opt.output_standalone = true;
       }
     }
     else if (option == "--careful_bubble") {
-      if (i + 1 < argc) {
+      if (i + 1 <= argc) {
         opt.careful_bubble = true;
       }
     }
@@ -293,7 +293,7 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
   // construct unitig graph
   timer.reset();
   timer.start();
-  UnitigGraph graph(&dbg, mpienv.rank);
+  UnitigGraph graph(&dbg, mpienv);
   timer.stop();
   xinfo("unitig graph size: {}, time for building: {.3}\n", graph.size(),
   timer.elapsed());
@@ -314,78 +314,74 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
   }
 
   // graph cleaning
-  //if (mpienv.rank == 0) {
-    for (int round = 1; round <= opt.cleaning_rounds; ++round) {
-      xinfo("Graph cleaning round {}\n", round);
-      bool changed = false;
-      if (round > 1) {
-        timer.reset();
-        timer.start();
-        uint32_t num_tips = RemoveTips(graph, opt.max_tip_len, mpienv);
-        changed |= num_tips > 0;
-        timer.stop();
-        xinfo("Tips removed: {}, time: {.3}\n", num_tips, timer.elapsed());
-      }
-      // remove bubbles
-      if (opt.bubble_level >= 1) {
-        timer.reset();
-        timer.start();
-        uint32_t num_bubbles = naiver_bubble_remover.PopBubbles(graph, true, mpienv);
-        timer.stop();
-        xinfo("Number of bubbles removed: {}, Time elapsed(sec): {.3}\n",
-              num_bubbles, timer.elapsed());
-        changed |= num_bubbles > 0;
-      }
-      
-      // remove complex bubbles
-      if (opt.bubble_level >= 2) {
-        timer.reset();
-        timer.start();
-        uint32_t num_bubbles = complex_bubble_remover.PopBubbles(graph, true, mpienv);
-        timer.stop();
-        xinfo("Number of complex bubbles removed: {}, Time elapsed(sec): {}\n",
-              num_bubbles, timer.elapsed());
-        changed |= num_bubbles > 0;
-      }
-      
-      // disconnect
+  for (int round = 1; round <= opt.cleaning_rounds; ++round) {
+    xinfo("Graph cleaning round {}\n", round);
+    bool changed = false;
+    if (round > 1) {
       timer.reset();
       timer.start();
-      uint32_t num_disconnected =
-          DisconnectWeakLinks(graph, mpienv, opt.disconnect_ratio);
+      uint32_t num_tips = RemoveTips(graph, opt.max_tip_len, mpienv);
+      changed |= num_tips > 0;
       timer.stop();
-      xinfo("Number unitigs disconnected: {} (have redundancy), time: {.3}\n", num_disconnected,
-            timer.elapsed());
-      changed |= num_disconnected > 0;
-      
-      // excessive pruning
-      uint32_t num_excessive_pruned = 0;
-      if (opt.prune_level >= 3) {
-        timer.reset();
-        timer.start();
-        num_excessive_pruned = RemoveLowDepth(graph, opt.min_depth);
-        num_excessive_pruned += naiver_bubble_remover.PopBubbles(graph, true, mpienv);
-        if (opt.bubble_level >= 2 && opt.merge_len > 0) {
-          num_excessive_pruned += complex_bubble_remover.PopBubbles(graph, true, mpienv);
-        }
-        timer.stop();
-        xinfo("Unitigs removed in (more-)excessive pruning: {}, time: {.3}\n",
-              num_excessive_pruned, timer.elapsed());
-      } else if (opt.prune_level >= 2) {
-        timer.reset();
-        timer.start();
-        RemoveLocalLowDepth(graph, opt.min_depth, opt.max_tip_len,
-                            opt.local_width, std::min(opt.low_local_ratio, 0.1),
-                            true, &num_excessive_pruned, mpienv);
-        timer.stop();
-        xinfo("Unitigs removed in excessive pruning: {}, time: {.3}\n",
-              num_excessive_pruned, timer.elapsed());
-      }
-      if (!changed) break;
+      xinfo("Tips removed: {}, time: {.3}\n", num_tips, timer.elapsed());
     }
-
-    //vtx_size = graph.vertices_size();
-  //} //rank == 0
+    // remove bubbles
+    if (opt.bubble_level >= 1) {
+      timer.reset();
+      timer.start();
+      uint32_t num_bubbles = naiver_bubble_remover.PopBubbles(graph, true, mpienv);
+      timer.stop();
+      xinfo("Number of bubbles removed: {}, Time elapsed(sec): {.3}\n",
+            num_bubbles, timer.elapsed());
+      changed |= num_bubbles > 0;
+    }
+    
+    // remove complex bubbles
+    if (opt.bubble_level >= 2) {
+      timer.reset();
+      timer.start();
+      uint32_t num_bubbles = complex_bubble_remover.PopBubbles(graph, true, mpienv);
+      timer.stop();
+      xinfo("Number of complex bubbles removed: {}, Time elapsed(sec): {}\n",
+            num_bubbles, timer.elapsed());
+      changed |= num_bubbles > 0;
+    }
+    
+    // disconnect
+    timer.reset();
+    timer.start();
+    uint32_t num_disconnected =
+        DisconnectWeakLinks(graph, mpienv, opt.disconnect_ratio);
+    timer.stop();
+    xinfo("Number unitigs disconnected: {} (have redundancy), time: {.3}\n", num_disconnected,
+          timer.elapsed());
+    changed |= num_disconnected > 0;
+    
+    // excessive pruning
+    uint32_t num_excessive_pruned = 0;
+    if (opt.prune_level >= 3) {
+      timer.reset();
+      timer.start();
+      num_excessive_pruned = RemoveLowDepth(graph, opt.min_depth);
+      num_excessive_pruned += naiver_bubble_remover.PopBubbles(graph, true, mpienv);
+      if (opt.bubble_level >= 2 && opt.merge_len > 0) {
+        num_excessive_pruned += complex_bubble_remover.PopBubbles(graph, true, mpienv);
+      }
+      timer.stop();
+      xinfo("Unitigs removed in (more-)excessive pruning: {}, time: {.3}\n",
+            num_excessive_pruned, timer.elapsed());
+    } else if (opt.prune_level >= 2) {
+      timer.reset();
+      timer.start();
+      RemoveLocalLowDepth(graph, opt.min_depth, opt.max_tip_len,
+                          opt.local_width, std::min(opt.low_local_ratio, 0.1),
+                          true, &num_excessive_pruned, mpienv);
+      timer.stop();
+      xinfo("Unitigs removed in excessive pruning: {}, time: {.3}\n",
+            num_excessive_pruned, timer.elapsed());
+    }
+    if (!changed) break;
+  }
 
   //MPI_Bcast(&vtx_size, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
   //if (mpienv.rank != 0) {

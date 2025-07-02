@@ -18,6 +18,8 @@
 #include <sys/wait.h>
 #include <thread>
 #include <future>
+#include <zlib.h>
+#include <tuple>
 
 #include "mpienv/mpienv.hpp"
 #include "definitions.h"
@@ -414,134 +416,61 @@ void create_library_file(Options &opt) {
     fclose(lib);
 }
 
+bool decompress_gz_file(const std::string& input_path, const std::string& output_path) {
+    constexpr size_t BUFFER_SIZE = 8 * 1024 * 1024;
+    std::vector<char> buffer(BUFFER_SIZE);
+
+
+    gzFile infile = gzopen(input_path.c_str(), "rb");
+    if (!infile) {
+        std::cerr << "Failed to open gzip file: " << input_path << std::endl;
+        return false;
+    }
+
+    FILE* outfile = fopen(output_path.c_str(), "wb");
+    if (!outfile) {
+        std::cerr << "Failed to open output file: " << output_path << std::endl;
+        gzclose(infile);
+        return false;
+    }
+
+    int bytes_read;
+    while ((bytes_read = gzread(infile, buffer.data(), BUFFER_SIZE)) > 0) {
+        fwrite(buffer.data(), 1, bytes_read, outfile);
+    }
+
+    gzclose(infile);
+    fclose(outfile);
+    return true;
+}
+
+std::string inpipe_path(const std::string& temp_dir, const std::string& type, int index) {
+    return (fs::path(temp_dir) / ("inpipe." + type + "." + std::to_string(index))).string();
+}
+
 void build_library(Options &opt) {
     std::vector<std::string> fifos;
-    std::vector<pid_t> pipes;
+    std::vector<std::tuple<std::string, std::string>> to_decompress;
 
-    std::vector<MPI_Comm> intercomms;
-    auto create_fifo = [&](const std::string& read_type, int num, int command) {
-        std::string fifo_path = opt.temp_dir + "/" + "inpipe." + read_type + "." + std::to_string(num);
-        remove_if_exists(fifo_path);
-        //mkfifo(fifo_path.c_str(), 0644);
-        fifos.push_back(fifo_path);
-        
-        // 创建子进程的命令和参数
-        //const char* cmd;
-        //if (command == 3) {
-            //    cmd = "gzip";
-            //} else {
-                //    cmd = "bzip2";
-                //}
-                
-                std::string cmd = abspath("./main_child"); // 子进程可执行文件的路径
-                std::string wdir = abspath("./"); // 子进程可执行文件的路径
-                std::cout << abspath("./main_child") << std::endl;
-                //char* argv[] = {const_cast<char*>(cmd), const_cast<char*>("-cd"), const_cast<char*>(opt.se[num].c_str()), const_cast<char*>(">"), const_cast<char*>(fifo_path.c_str()), nullptr};
-        char* argv[] = {const_cast<char*>(cmd.c_str()), const_cast<char*>(opt.se[num].c_str()), const_cast<char*>(fifo_path.c_str()), nullptr};
-        // 使用 MPI_Comm_spawn 创建子进程
-        MPI_Comm intercomm;
-        MPI_Info info;
-        MPI_Info_create(&info);
-        MPI_Info_set(info, "wdir", wdir.c_str());
-        int err = MPI_Comm_spawn("main_child", argv, 1, info, 0, MPI_COMM_SELF, &intercomm, MPI_ERRCODES_IGNORE);
-        if (err != MPI_SUCCESS) {
-            fprintf(stderr, "MPI_Comm_spawn failed\n");
-            exit(1);
-        }
-        intercomms.push_back(intercomm);
-    };
-    /*
-    auto create_fifo = [&](const std::string& read_type, int num, int &command) {
-        std::string fifo_path = opt.temp_dir + "/" + "inpipe." + read_type + "." + std::to_string(num);
-        remove_if_exists(fifo_path);
-        fifos.push_back(fifo_path);
-        
-        pid_t pid = fork();
-        if (pid == 0) {
-            // 打开输出文件
-            int fd = open(fifo_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
-            if (fd == -1) {
-                perror("open failed");
-                exit(1);
-            }
-            
-            // 将标准输出重定向到文件
-            if (dup2(fd, STDOUT_FILENO) == -1) {
-                perror("dup2 failed");
-                exit(1);
-            }
-            close(fd);
-            
-            // Child process
-            if (command = 3) {
-                execlp("gzip", "gzip", "-cd", opt.se[num].c_str(), (char*)nullptr);
-            } else {
-                execlp("bzip2", "bzip2", "-cd", opt.se[num].c_str(), (char*)nullptr);
-            }
-            
-            perror("execlp failed");
-            exit(1);
-        } else {
-            // Parent process
-            pipes.push_back(pid);
+    auto add = [&](const std::string& type, const std::string& file, int index) {
+        if (file.size() >= 3 && file.compare(file.size() - 3, 3, ".gz") == 0) {
+            to_decompress.emplace_back(file, inpipe_path(opt.temp_dir, type, index));
         }
     };
-    */
 
-    try {
-        // Create inpipe for pe12
-        for (int i = 0; i < opt.pe12.size(); ++i) {
-            int cmd = execlp_cmd(opt.pe12[i]);
-            if (cmd) {
-                create_fifo("pe12", i, cmd);
-            }
-        }
+    for (size_t i = 0; i < opt.pe12.size(); ++i) add("pe12", opt.pe12[i], i);
+    for (size_t i = 0; i < opt.pe1.size(); ++i) {
+        add("pe1", opt.pe1[i], i);
+        add("pe2", opt.pe2[i], i);
+    }
+    for (size_t i = 0; i < opt.se.size(); ++i) add("se", opt.se[i], i);
 
-        // Create inpipe for pe1
-        for (int i = 0; i < opt.pe1.size(); ++i) {
-            int cmd = execlp_cmd(opt.pe1[i]);
-            if (cmd) {
-                create_fifo("pe1", i, cmd);
-            }
+    for (const auto& [infile, outfile] : to_decompress) {
+        std::cout << "Decompressing: " << infile << " -> " << outfile << std::endl;
+        if (!decompress_gz_file(infile, outfile)) {
+            std::cerr << "Error decompressing file." << std::endl;
+            exit(1);
         }
-
-        // Create inpipe for pe2
-        for (int i = 0; i < opt.pe2.size(); ++i) {
-            int cmd = execlp_cmd(opt.pe2[i]);
-            if (cmd) {
-                create_fifo("pe2", i, cmd);
-            }
-        }
-
-        // Create inpipe for se
-        for (int i = 0; i < opt.se.size(); ++i) {
-            int cmd = execlp_cmd(opt.se[i]);
-            if (cmd) {
-                create_fifo("se", i, cmd);
-            }
-        }
-        
-        /*
-        // Wait for all child processes to finish
-        for (pid_t pid : pipes) {
-            int status;
-            waitpid(pid, &status, 0);
-            if (status != 0) {
-                std::cerr << "Error occurred when reading inputs\n";
-                exit(status);
-            }
-        }
-        */
-
-        for (MPI_Comm intercomm : intercomms) {
-            // 在父进程和子进程之间执行 Barrier，同步进程
-            MPI_Barrier(intercomm);
-            // 断开父进程与子进程之间的通信
-            MPI_Comm_disconnect(&intercomm);
-        }
-    } catch (const std::exception& e) {
-        std::cerr << "Exception: " << e.what() << '\n';
-        exit(1);
     }
 
     std::vector<std::string> args = {"buildlib", opt.read_lib_path(), opt.read_lib_path()};
@@ -558,6 +487,10 @@ void build_library(Options &opt) {
     // Clean up
     for (const std::string& fifo : fifos) {
         remove_if_exists(fifo);
+    }
+
+    for (const auto& [infile, outfile] : to_decompress) {
+        remove_if_exists(outfile);
     }
 }
 

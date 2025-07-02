@@ -21,7 +21,7 @@ class UnitigGraph {
   static const size_type kNullVertexID = kMaxNumVertices + 1;
 
  public:
-  explicit UnitigGraph(SDBG *sdbg, uint32_t rank);
+  explicit UnitigGraph(SDBG *sdbg, MPIEnviroment &mpienv);
   UnitigGraph(const UnitigGraph &) = delete;
   UnitigGraph(const UnitigGraph &&) = delete;
   ~UnitigGraph() = default;
@@ -166,6 +166,7 @@ class UnitigGraph {
   uint32_t rank_;
   //std::deque<UnitigGraphVertex> vertices_;
   std::vector<UnitigGraphVertex> vertices_;
+  std::vector<UnitigGraphVertex> loop_vertices_;
   phmap::flat_hash_map<uint64_t, size_type> id_map_;
   AdapterImpl<VertexAdapter> adapter_impl_;
   AdapterImpl<SudoVertexAdapter> sudo_adapter_impl_;

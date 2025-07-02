@@ -10,19 +10,18 @@
 #include "utils/mutex.h"
 #include "utils/utils.h"
 
-UnitigGraph::UnitigGraph(SDBG *sdbg, uint32_t rank)
-    : sdbg_(sdbg), rank_(rank), adapter_impl_(this), sudo_adapter_impl_(this) {
+UnitigGraph::UnitigGraph(SDBG *sdbg, MPIEnviroment &mpienv)
+    : sdbg_(sdbg), rank_(mpienv.rank), adapter_impl_(this), sudo_adapter_impl_(this) {
   id_map_.clear();
   vertices_.clear();
+  loop_vertices_.clear();
   SpinLock path_lock;
   AtomicBitVector locks(sdbg_->size());
   size_t count_palindrome = 0;
-  size_t vertices_size = 0;
 
-  if (rank == 0) {
 // assemble simple paths
 #pragma omp parallel for reduction(+ : count_palindrome)
-  for (uint64_t edge_idx = 0; edge_idx < sdbg_->size(); ++edge_idx) {
+  for (uint64_t edge_idx = mpienv.rank; edge_idx < sdbg_->size(); edge_idx += mpienv.nprocs) {
     if (sdbg_->IsValidEdge(edge_idx) &&
         sdbg_->NextSimplePathEdge(edge_idx) == SDBG::kNullID &&
         locks.try_lock(edge_idx)) {
@@ -51,13 +50,13 @@ UnitigGraph::UnitigGraph(SDBG *sdbg, uint32_t rank)
       uint64_t rc_end;
       assert(rc_start != SDBG::kNullID);
 
-      if (!locks.try_lock(rc_start)) {
-        rc_end = sdbg_->EdgeReverseComplement(cur_edge);
-        if (std::max(edge_idx, cur_edge) < std::max(rc_start, rc_end)) {
+      auto rc_tmp = sdbg_->EdgeReverseComplement(cur_edge);
+      //if (!locks.try_lock(rc_start)) {
+      if (std::max(edge_idx, cur_edge) < std::max(rc_start, rc_tmp)) {
           will_be_added = false;
-        }
       } else {
         // lock through the rc path
+        locks.try_lock(rc_start);
         uint64_t rc_cur_edge = rc_start;
         rc_end = rc_cur_edge;
         bool extend_full = true;
@@ -86,6 +85,8 @@ UnitigGraph::UnitigGraph(SDBG *sdbg, uint32_t rank)
   xinfo("Graph size without loops: {}, palindrome: {}\n", vertices_.size(),
         count_palindrome);
 
+  MPI_Allreduce(MPI_IN_PLACE, locks.data_array_.data(), locks.data_array_.size(), MPI_UNSIGNED_LONG, MPI_BOR, MPI_COMM_WORLD);
+
   // assemble looped paths
   std::mutex loop_lock;
   size_t count_loop = 0;
@@ -113,7 +114,7 @@ UnitigGraph::UnitigGraph(SDBG *sdbg, uint32_t rank)
         if (!rc_marked) {
           uint64_t start = sdbg_->NextSimplePathEdge(edge_idx);
           uint64_t end = edge_idx;
-          vertices_.emplace_back(start, end, sdbg_->EdgeReverseComplement(end),
+          loop_vertices_.emplace_back(start, end, sdbg_->EdgeReverseComplement(end),
                                  sdbg_->EdgeReverseComplement(start), depth,
                                  length, true);
           count_loop += 1;
@@ -121,13 +122,9 @@ UnitigGraph::UnitigGraph(SDBG *sdbg, uint32_t rank)
       }
     }
   }
-  vertices_size = vertices_.size();
-} // if (rank == 0)
-
-  MPI_Bcast(&vertices_size, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
-  if (rank != 0) {
-    vertices_.resize(vertices_size);
-  }
+  xinfo("Graph size of loops: {}, count_loop: {}\n", loop_vertices_.size(), count_loop);
+  MPI_Barrier(MPI_COMM_WORLD);
+  exit(0);
   UnitigGraph::Mpi_Bcast_vertices();
 
   if (vertices_.size() >= kMaxNumVertices) {

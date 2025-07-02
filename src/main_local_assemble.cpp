@@ -82,62 +82,62 @@ void ParseLAOptions(int argc, char **argv, LocalAsmOption &opt) {
   for (int i = 1; i < argc; ++i) {
     std::string option = argv[i];
     if (option == "-c" || option == "--contig_file") {
-      if (i + 1 < argc) {
+      if (i + 1 <= argc) {
         opt.contig_file = argv[++i];
       }
     }
     else if (option == "-l" || option == "--lib_file_prefix") {
-      if (i + 1 < argc) {
+      if (i + 1 <= argc) {
         opt.lib_file_prefix = argv[++i];
       }
     }
     else if (option == "--kmin") {
-      if (i + 1 < argc) {
+      if (i + 1 <= argc) {
         opt.kmin = std::stoi(argv[++i]);
       }
     }
     else if (option == "--kmax") {
-      if (i + 1 < argc) {
+      if (i + 1 <= argc) {
         opt.kmax = std::stoi(argv[++i]);
       }
     }
     else if (option == "--step") {
-      if (i + 1 < argc) {
+      if (i + 1 <= argc) {
         opt.step = std::stoi(argv[++i]);
       }
     }
     else if (option == "--seed_kmer") {
-      if (i + 1 < argc) {
+      if (i + 1 <= argc) {
         opt.seed_kmer = std::stoi(argv[++i]);
       }
     }
     else if (option == "--min_contig_len") {
-      if (i + 1 < argc) {
+      if (i + 1 <= argc) {
         opt.min_contig_len = std::stoi(argv[++i]);
       }
     }
     else if (option == "--min_mapping_len") {
-      if (i + 1 < argc) {
+      if (i + 1 <= argc) {
         opt.min_mapping_len = std::stoi(argv[++i]);
       }
     }
     else if (option == "--sparsity") {
-      if (i + 1 < argc) {
+      if (i + 1 <= argc) {
         opt.sparsity = std::stoi(argv[++i]);
       }
     }
     else if (option == "--similarity") {
-      if (i + 1 < argc) {
+      if (i + 1 <= argc) {
         opt.similarity = std::stod(argv[++i]);
       }
     }
     else if (option == "-t" || option == "--num_threads") {
-      if (i + 1 < argc) {
+      if (i + 1 <= argc) {
         opt.num_threads = std::stoi(argv[++i]);
       }
     }
     else if (option == "-o" || option == "--output_file") {
-      if (i + 1 < argc) {
+      if (i + 1 <= argc) {
         opt.output_file = argv[++i];
       }
     }

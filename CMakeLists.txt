@@ -9,14 +9,20 @@ include_directories(${CMAKE_BINARY_DIR}/thirdparty/ga-5.8.2/gaf2c)
 
 add_subdirectory(thirdparty/fmt-11.2.0)
 
-set(CMAKE_C_COMPILER mpicc)
-set(CMAKE_CXX_COMPILER mpicxx)
 
 #if (CMAKE_VERSION VERSION_LESS "3.1")
 #    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 #else ()
 set(CMAKE_CXX_STANDARD 17)
 #endif ()
+
+option(ZLIB_ENABLE_TESTS "" OFF)
+option(ZLIB_COMPAT "" ON)
+
+add_subdirectory(thirdparty/zlib-ng-2.2.4)
+
+set(CMAKE_C_COMPILER mpicc)
+set(CMAKE_CXX_COMPILER mpicxx)
 
 option(COVERAGE "Generate coverage report" OFF)
 option(STATIC_BUILD "Build static executation" OFF)
@@ -45,7 +51,7 @@ if (STATIC_BUILD)
     set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
 endif (STATIC_BUILD)
 
-find_package(ZLIB REQUIRED)
+#find_package(ZLIB REQUIRED)
 find_package(OpenMP REQUIRED)
 
 
@@ -84,9 +90,9 @@ add_executable(mpimeta_core_no_hw_accel ${OTHER_SOURCE} ${SDBG_SOURCE} ${SEQ_SOU
 set_target_properties(mpimeta_core PROPERTIES COMPILE_FLAGS "-mbmi2 -DUSE_BMI2 -mpopcnt")
 set_target_properties(mpimeta_core_popcnt PROPERTIES COMPILE_FLAGS "-mpopcnt")
 
-target_link_libraries(mpimeta_core ${ZLIB_LIBRARIES})
-target_link_libraries(mpimeta_core_popcnt ${ZLIB_LIBRARIES})
-target_link_libraries(mpimeta_core_no_hw_accel ${ZLIB_LIBRARIES})
+#target_link_libraries(mpimeta_core ${ZLIB_LIBRARIES})
+#target_link_libraries(mpimeta_core_popcnt ${ZLIB_LIBRARIES})
+#target_link_libraries(mpimeta_core_no_hw_accel ${ZLIB_LIBRARIES})
 
 target_link_libraries(mpimeta_core 
 		ga
@@ -94,21 +100,28 @@ target_link_libraries(mpimeta_core
 		m
 		armci
 		comex
-		fmt::fmt)
+		fmt::fmt
+		zlib)
 target_link_libraries(mpimeta_core_popcnt 
 		ga
 		ga++
 		m
 		armci
 		comex
-		fmt::fmt)
+		fmt::fmt
+		zlib)
 target_link_libraries(mpimeta_core_no_hw_accel 
 		ga
 		ga++
 		armci
 		m
 		comex
-		fmt::fmt)
+		fmt::fmt
+		zlib)
+
+target_include_directories(mpimeta_core PRIVATE thirdparty/zlib-ng-2.2.4)
+target_include_directories(mpimeta_core_popcnt PRIVATE thirdparty/zlib-ng-2.2.4)
+target_include_directories(mpimeta_core_no_hw_accel PRIVATE thirdparty/zlib-ng-2.2.4)
 
 add_custom_target(
         mpimeta ALL
