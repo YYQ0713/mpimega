@@ -67,13 +67,11 @@ int BaseBubbleRemover::SearchAndPopBubble(UnitigGraph &graph,
   if (degree <= 1) {
     return 0;
   }
-
   for (int j = 0; j < degree; ++j) {
     if (middle[j].GetLength() > max_len) {
       return 0;
     }
   }
-
   for (int j = 0; j < degree; ++j) {
     if (graph.InDegree(middle[j]) != 1 ||
         graph.GetNextAdapters(middle[j], possible_right) != 1) {
@@ -91,7 +89,6 @@ int BaseBubbleRemover::SearchAndPopBubble(UnitigGraph &graph,
       }
     }
   }
-
   std::sort(middle, middle + degree,
             [](const UnitigGraph::VertexAdapter &a,
                const UnitigGraph::VertexAdapter &b) {
@@ -105,7 +102,6 @@ int BaseBubbleRemover::SearchAndPopBubble(UnitigGraph &graph,
       return 0;
     }
   }
-
   bool careful_merged = false;
   int num_removed = 0;
   for (int j = 1; j < degree; ++j) {
@@ -121,7 +117,6 @@ int BaseBubbleRemover::SearchAndPopBubble(UnitigGraph &graph,
       careful_merged = true;
     }
   }
-
   if (careful_merged) {
     std::string left_label = graph.VertexToDNAString(adapter);
     std::string right_label = graph.VertexToDNAString(right);
@@ -145,9 +140,8 @@ size_t BaseBubbleRemover::PopBubbles(UnitigGraph &graph, bool permanent_rm,
   //每个进程计算自己所要处理的数据对应索引起止范围
   int64_t start_index = mpienv.rank * num_edges_mean + (mpienv.rank < remain ? mpienv.rank : remain);
   int64_t end_index = start_index + num_edges_mean + (mpienv.rank < remain ? 1 : 0);
-
 #pragma omp parallel for reduction(+ : num_removed)
-  for (UnitigGraph::size_type i = start_index; i < end_index; ++i) {
+  for (UnitigGraph::size_type i = 0; i < graph.size(); ++i) {
     UnitigGraph::VertexAdapter adapter = graph.MakeVertexAdapter(i);
     if (adapter.IsStandalone()) {
       continue;
@@ -157,9 +151,9 @@ size_t BaseBubbleRemover::PopBubbles(UnitigGraph &graph, bool permanent_rm,
     }
   }
 
-  MPI_Allreduce(MPI_IN_PLACE, &num_removed, 1, MPI_UINT32_T, MPI_SUM, MPI_COMM_WORLD);
-  graph.Mpi_Allreduce_vertices();
-  graph.MPIRefresh(!permanent_rm, mpienv.rank);
+  //MPI_Allreduce(MPI_IN_PLACE, &num_removed, 1, MPI_UINT32_T, MPI_SUM, MPI_COMM_WORLD);
+  //graph.Mpi_Allreduce_vertices();
+  graph.Refresh(!permanent_rm);
   return num_removed;
 }
 

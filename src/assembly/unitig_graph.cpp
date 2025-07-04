@@ -11,7 +11,7 @@
 #include "utils/utils.h"
 
 UnitigGraph::UnitigGraph(SDBG *sdbg, MPIEnviroment &mpienv)
-    : sdbg_(sdbg), rank_(mpienv.rank), adapter_impl_(this), sudo_adapter_impl_(this) {
+    : sdbg_(sdbg), mpienv_(mpienv), adapter_impl_(this), sudo_adapter_impl_(this) {
   id_map_.clear();
   vertices_.clear();
   loop_vertices_.clear();
@@ -123,9 +123,21 @@ UnitigGraph::UnitigGraph(SDBG *sdbg, MPIEnviroment &mpienv)
     }
   }
   xinfo("Graph size of loops: {}, count_loop: {}\n", loop_vertices_.size(), count_loop);
-  MPI_Barrier(MPI_COMM_WORLD);
-  exit(0);
-  UnitigGraph::Mpi_Bcast_vertices();
+  sdbg_->FreeMultiplicity();
+  UniGather();
+
+  vertices_.reserve(vertices_.size() + loop_vertices_.size());
+  // 移动拼接，避免拷贝
+  vertices_.insert(vertices_.end(), std::make_move_iterator(loop_vertices_.begin()), std::make_move_iterator(loop_vertices_.end()));
+  // swap 释放 v2 的容量（缩容技巧）
+  std::vector<UnitigGraphVertex>().swap(loop_vertices_);  // v2 清空且 capacity = 0
+
+  xinfo("Graph size without loops: {}, palindrome: {}\n", vertices_.size(), count_palindrome);
+
+  //vertices_sort();
+  //show_info(mpienv.rank);
+  //MPI_Barrier(MPI_COMM_WORLD); // Barrier
+  //exit(0);
 
   if (vertices_.size() >= kMaxNumVertices) {
     xfatal(
@@ -133,8 +145,7 @@ UnitigGraph::UnitigGraph(SDBG *sdbg, MPIEnviroment &mpienv)
         "you may increase the kmer size to remove tons of erroneous kmers.\n",
         vertices_.size(), kMaxNumVertices);
   }
-
-  sdbg_->FreeMultiplicity();
+  
   id_map_.reserve(vertices_.size() * 2 - count_palindrome);
 
   for (size_type i = 0; i < vertices_.size(); ++i) {
@@ -411,6 +422,8 @@ void UnitigGraph::Refresh(bool set_changed) {
     }
   }
 
+  //vertices_sort();
+  //show_info(mpienv_.rank);
   AtomicBitVector locks(size());
 #pragma omp parallel for
   for (size_type i = 0; i < vertices_.size(); ++i) {
@@ -517,6 +530,7 @@ void UnitigGraph::Refresh(bool set_changed) {
                    vertices_.begin());
 
   size_type num_changed = 0;
+  //vertices_sort();
 #pragma omp parallel for reduction(+ : num_changed)
   for (size_type i = 0; i < vertices_.size(); ++i) {
     auto adapter = MakeSudoAdapter(i);
@@ -656,6 +670,69 @@ void UnitigGraph::Mpi_Bcast_vertices() {
   MPI_Type_free(&MPI_vertices);
 }
 
+void UnitigGraph::UniGather() {
+  MPI_Datatype MPI_vertices;
+
+  const int kFieldCount = 7;
+  int block_lengths[kFieldCount] = {4, 1, 1, 1, 1, 1, 1};
+  MPI_Aint displacements[kFieldCount];
+  displacements[0] = offsetof(UnitigGraphVertex, strand_info);
+  displacements[1] = offsetof(UnitigGraphVertex, total_depth);
+  displacements[2] = offsetof(UnitigGraphVertex, length);
+  displacements[3] = offsetof(UnitigGraphVertex, is_looped);
+  displacements[4] = offsetof(UnitigGraphVertex, is_palindrome);
+  displacements[5] = offsetof(UnitigGraphVertex, is_changed);
+  displacements[6] = offsetof(UnitigGraphVertex, flag);
+
+  MPI_Datatype types[kFieldCount] = {
+    MPI_UINT64_T,
+    MPI_UINT64_T,
+    MPI_UINT32_T,
+    MPI_C_BOOL,
+    MPI_C_BOOL,
+    MPI_C_BOOL,
+    MPI_UINT8_T,
+  };
+
+  MPI_Type_create_struct(kFieldCount, block_lengths, displacements, types, &MPI_vertices);
+  MPI_Type_commit(&MPI_vertices);
+
+  // Step 1: gather local sizes as MPI_Count
+  MPI_Count local_count = static_cast<MPI_Count>(vertices_.size());
+  std::vector<MPI_Count> recv_counts(mpienv_.nprocs);
+  MPI_Allgather_c(&local_count, 1, MPI_COUNT, recv_counts.data(), 1, MPI_COUNT, MPI_COMM_WORLD);
+
+  // Step 2: compute displacements
+  std::vector<MPI_Count> displs(mpienv_.nprocs, 0);
+  MPI_Count total_count = 0;
+  for (int i = 0; i < mpienv_.nprocs; ++i) {
+    displs[i] = total_count;
+    total_count += recv_counts[i];
+  }
+
+  // Step 3: resize vertices_ to hold all gathered data
+  MPI_Count old_local_count = local_count;
+  vertices_.resize(total_count);
+
+  // Step 4: move local data to correct offset if using IN_PLACE
+  if (displs[mpienv_.rank] != 0) {
+    std::memmove(
+      vertices_.data() + displs[mpienv_.rank],
+      vertices_.data(),
+      old_local_count * sizeof(UnitigGraphVertex)
+    );
+  }
+
+  // Step 5: use IN_PLACE gather
+  MPI_Allgatherv_c(
+    MPI_IN_PLACE, 0, MPI_DATATYPE_NULL,         // sendbuf ignored
+    vertices_.data(), recv_counts.data(), displs.data(),
+    MPI_vertices, MPI_COMM_WORLD
+  );
+
+  MPI_Type_free(&MPI_vertices);
+}
+
 void UnitigGraph::show_info(int rank) {
   std::string filename = std::to_string(rank) + "_output.txt"; // 文件名
     
@@ -684,6 +761,53 @@ void UnitigGraph::vertices_resize(size_t size) {
   vertices_.resize(size);
 }
 
+//按照strandinfo的begin升序排序
+void UnitigGraph::vertices_sort() {
+    tbb::parallel_sort(vertices_.begin(), vertices_.end(),
+        [](const UnitigGraphVertex& a, const UnitigGraphVertex& b) { return a.strand_info[0].begin < b.strand_info[0].begin; }
+    );
+}
+
 size_t UnitigGraph::vertices_size() {
-  return vertices_.size();
+    return vertices_.size();
+}
+
+uint32_t UnitigGraph::VerticesIndexWithSdbgId(uint64_t sdbg_id) {
+    auto it = std::lower_bound(
+        vertices_.begin(), vertices_.end(), sdbg_id,
+        [](const UnitigGraphVertex& node, uint64_t value) {
+            return node.strand_info[0].begin < value;
+        });
+
+    if (it != vertices_.end() && it->strand_info[0].begin == sdbg_id) {
+        return static_cast<int>(std::distance(vertices_.begin(), it));
+    }
+
+    // 试图查找反向互补
+    uint64_t prev_edge;
+    uint64_t rc_sdbg_id = sdbg_->EdgeReverseComplement(sdbg_id);
+    while ((prev_edge = sdbg_->PrevSimplePathEdge(rc_sdbg_id)) !=
+            SDBG::kNullID) {
+        rc_sdbg_id = prev_edge;
+    }
+    //printf("rc_sdbg_id: {%ld};sdbg_id: {%d}\n", rc_sdbg_id, sdbg_id);
+    it = std::lower_bound(
+        vertices_.begin(), vertices_.end(), rc_sdbg_id,
+        [](const UnitigGraphVertex& node, uint64_t value) {
+            return node.strand_info[0].begin < value;
+        });
+
+    if (it != vertices_.end() && it->strand_info[0].begin == rc_sdbg_id) {
+        return static_cast<int>(std::distance(vertices_.begin(), it));
+    }
+
+    uint64_t last_sdbg_id = sdbg_->EdgeReverseComplement(rc_sdbg_id);
+    while ((prev_edge = sdbg_->PrevSimplePathEdge(last_sdbg_id)) !=
+            SDBG::kNullID) {
+        last_sdbg_id = prev_edge;
+    }
+    return last_sdbg_id;
+    // 一定不能到这
+    assert(false && "BUG: sdbg_id not found in VerticesIndexWithSdbgId()");
+    return -1;  // 只为了编译器警告消除
 }

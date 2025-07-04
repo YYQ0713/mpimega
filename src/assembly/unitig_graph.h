@@ -8,8 +8,11 @@
 #include <deque>
 #include <limits>
 #include "parallel_hashmap/phmap.h"
+#include "sparsepp/spp.h"
 #include "sdbg/sdbg.h"
 #include "unitig_graph_vertex.h"
+#include <tbb/parallel_sort.h>
+#include <algorithm>
 
 class UnitigGraph {
  public:
@@ -33,10 +36,13 @@ class UnitigGraph {
   void MPIRefresh(bool mark_changed = false, int rank = -1);
   void Mpi_Allreduce_vertices();
   void Mpi_Bcast_vertices();
+  void UniGather();
   void show_info(int rank);
   void vertices_resize(size_t size);
+  void vertices_sort();
   size_t vertices_size();
   std::string VertexToDNAString(VertexAdapter adapter);
+  uint32_t VerticesIndexWithSdbgId(uint64_t sdbg_id); 
 
  public:
   /*
@@ -148,6 +154,8 @@ class UnitigGraph {
    private:
     AdapterType MakeVertexAdapterWithSdbgId(uint64_t sdbg_id) {
       uint32_t id = graph_->id_map_.at(sdbg_id);
+      //uint32_t id = graph_->VerticesIndexWithSdbgId(sdbg_id);
+      //printf("sdbg_id: {%ld};id: {%d}\n", sdbg_id, id);
       AdapterType adapter(graph_->vertices_[id], 0, id);
       if (adapter.b() != sdbg_id) {
         adapter.ReverseComplement();
@@ -163,13 +171,42 @@ class UnitigGraph {
 
  private:
   SDBG *sdbg_{};
-  uint32_t rank_;
+  MPIEnviroment mpienv_;
   //std::deque<UnitigGraphVertex> vertices_;
   std::vector<UnitigGraphVertex> vertices_;
   std::vector<UnitigGraphVertex> loop_vertices_;
-  phmap::flat_hash_map<uint64_t, size_type> id_map_;
+  //phmap::flat_hash_map<uint64_t, size_type> id_map_;
+  spp::sparse_hash_map<uint64_t, size_type> id_map_;
   AdapterImpl<VertexAdapter> adapter_impl_;
   AdapterImpl<SudoVertexAdapter> sudo_adapter_impl_;
+};
+
+class PackedRecord {
+  public:
+    PackedRecord(uint32_t id_,
+                uint64_t ns, uint64_t ne,
+                uint64_t nrcs, uint64_t nrce,
+                uint64_t td, uint32_t len,
+                bool loop, bool change)
+        : new_start(ns), new_end(ne),
+          new_rc_start(nrcs), new_rc_end(nrce),
+          total_depth(td), id(id_), length(len),
+          flags((loop ? 1 : 0) | (change ? 2 : 0)) {}
+    // 用两个 64bit 的字段容纳 4 个 48bit 的成员（共 192bit）
+    uint64_t new_start   : 48;
+    uint64_t new_end     : 48;
+    uint64_t new_rc_start: 48;
+    uint64_t new_rc_end  : 48;
+
+    uint64_t total_depth;
+
+    uint32_t id;
+    uint32_t length;
+
+    uint8_t flags; // bit 0: is_loop, bit 1: is_change
+
+    bool is_loop()   const { return flags & 1; }
+    bool is_change() const { return flags & 2; }
 };
 
 #endif  // MEGAHIT_UNITIG_GRAPH_H

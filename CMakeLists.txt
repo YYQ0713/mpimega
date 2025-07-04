@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.18)
 project(mpimeta)
 set(CMAKE_VERBOSE_MAKEFILE ON)
+set(CMAKE_CXX_STANDARD 17)
 
 add_subdirectory(thirdparty/ga-5.8.2)
 include_directories(thirdparty/ga-5.8.2/global/src)
@@ -9,11 +10,13 @@ include_directories(${CMAKE_BINARY_DIR}/thirdparty/ga-5.8.2/gaf2c)
 
 add_subdirectory(thirdparty/fmt-11.2.0)
 
+set(TBB_TEST OFF CACHE BOOL "Disable TBB tests")
+set(TBB_EXAMPLES OFF CACHE BOOL "Disable TBB examples")
+add_subdirectory(thirdparty/oneTBB-2022.2.0)
 
 #if (CMAKE_VERSION VERSION_LESS "3.1")
 #    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 #else ()
-set(CMAKE_CXX_STANDARD 17)
 #endif ()
 
 option(ZLIB_ENABLE_TESTS "" OFF)
@@ -101,7 +104,8 @@ target_link_libraries(mpimeta_core
 		armci
 		comex
 		fmt::fmt
-		zlib)
+		zlib
+		TBB::tbb)
 target_link_libraries(mpimeta_core_popcnt 
 		ga
 		ga++
@@ -109,7 +113,8 @@ target_link_libraries(mpimeta_core_popcnt
 		armci
 		comex
 		fmt::fmt
-		zlib)
+		zlib
+		TBB::tbb)
 target_link_libraries(mpimeta_core_no_hw_accel 
 		ga
 		ga++
@@ -117,12 +122,15 @@ target_link_libraries(mpimeta_core_no_hw_accel
 		m
 		comex
 		fmt::fmt
-		zlib)
+		zlib
+		TBB::tbb)
 
 target_include_directories(mpimeta_core PRIVATE thirdparty/zlib-ng-2.2.4)
 target_include_directories(mpimeta_core_popcnt PRIVATE thirdparty/zlib-ng-2.2.4)
 target_include_directories(mpimeta_core_no_hw_accel PRIVATE thirdparty/zlib-ng-2.2.4)
-
+target_include_directories(mpimeta_core PRIVATE thirdparty/oneTBB-2022.2.0/include)
+target_include_directories(mpimeta_core_popcnt PRIVATE thirdparty/oneTBB-2022.2.0/include)
+target_include_directories(mpimeta_core_no_hw_accel PRIVATE thirdparty/oneTBB-2022.2.0/include)
 add_custom_target(
         mpimeta ALL
         COMMAND cp ${CMAKE_SOURCE_DIR}/src/mpimeta .

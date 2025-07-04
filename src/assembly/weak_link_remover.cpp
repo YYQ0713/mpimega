@@ -13,7 +13,7 @@ uint32_t DisconnectWeakLinks(UnitigGraph &graph, MPIEnviroment &mpienv, double l
   int64_t end_index = start_index + num_edges_mean + (mpienv.rank < remain ? 1 : 0);
 
 #pragma omp parallel for reduction(+ : num_disconnected)
-  for (UnitigGraph::size_type i = start_index; i < end_index; ++i) {
+  for (UnitigGraph::size_type i = 0; i < graph.size(); ++i) {
     auto adapter = graph.MakeVertexAdapter(i);
     if (adapter.IsStandalone() || adapter.IsPalindrome()) {
       continue;
@@ -37,8 +37,8 @@ uint32_t DisconnectWeakLinks(UnitigGraph &graph, MPIEnviroment &mpienv, double l
       }
     }
   }
-  MPI_Allreduce(MPI_IN_PLACE, &num_disconnected, 1, MPI_UINT32_T, MPI_SUM, MPI_COMM_WORLD);
-  graph.Mpi_Allreduce_vertices();
-  graph.MPIRefresh(false, mpienv.rank);
+  //MPI_Allreduce(MPI_IN_PLACE, &num_disconnected, 1, MPI_UINT32_T, MPI_SUM, MPI_COMM_WORLD);
+  //graph.Mpi_Allreduce_vertices();
+  graph.Refresh(false);
   return num_disconnected;
 }
