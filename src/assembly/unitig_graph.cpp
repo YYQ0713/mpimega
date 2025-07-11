@@ -13,6 +13,7 @@
 UnitigGraph::UnitigGraph(SDBG *sdbg, MPIEnviroment &mpienv)
     : sdbg_(sdbg), mpienv_(mpienv), adapter_impl_(this), sudo_adapter_impl_(this) {
   id_map_.clear();
+  //strand_map_.clear();
   vertices_.clear();
   loop_vertices_.clear();
   SpinLock path_lock;
@@ -147,13 +148,16 @@ UnitigGraph::UnitigGraph(SDBG *sdbg, MPIEnviroment &mpienv)
   }
   
   id_map_.reserve(vertices_.size() * 2 - count_palindrome);
+  //strand_map_.reserve(vertices_.size());
 
   for (size_type i = 0; i < vertices_.size(); ++i) {
     VertexAdapter adapter(vertices_[i]);
+    //strand_map_[adapter.rb()] = adapter.b();
     id_map_[adapter.b()] = i;
     id_map_[adapter.rb()] = i;
   }
   assert(vertices_.size() * 2 - count_palindrome >= id_map_.size());
+  //assert(vertices_.size() >= strand_map_.size());
 }
 
 void UnitigGraph::RefreshDisconnected() {
@@ -226,176 +230,12 @@ void UnitigGraph::RefreshDisconnected() {
   }
 }
 
-void UnitigGraph::MPIRefresh(bool set_changed, int rank) {
-  static const uint8_t kDeleted = 0x1;
-  static const uint8_t kVisited = 0x2;
-  size_t vertices_size = 0;
-  RefreshDisconnected();
-#pragma omp parallel for
-  for (size_type i = 0; i < vertices_.size(); ++i) {
-    auto adapter = MakeSudoAdapter(i);
-    if (!adapter.IsToDelete()) {
-      continue;
-    }
-    adapter.SetFlag(kDeleted);
-    if (adapter.IsStandalone()) {
-      continue;
-    }
-    for (int strand = 0; strand < 2; ++strand, adapter.ReverseComplement()) {
-      uint64_t cur_edge = adapter.e();
-      for (size_t j = 1; j < adapter.GetLength(); ++j) {
-        auto prev = sdbg_->UniquePrevEdge(cur_edge);
-        sdbg_->SetInvalidEdge(cur_edge);
-        cur_edge = prev;
-        assert(cur_edge != SDBG::kNullID);
-      }
-      assert(cur_edge == adapter.b());
-      sdbg_->SetInvalidEdge(cur_edge);
-      if (adapter.IsPalindrome()) {
-        break;
-      }
-    }
-  }
-
-  if (rank == 0) {
-    AtomicBitVector locks(size());
-  #pragma omp parallel for
-    for (size_type i = 0; i < vertices_.size(); ++i) {
-      auto adapter = MakeSudoAdapter(i);
-      if (adapter.IsStandalone() || (adapter.GetFlag() & kDeleted)) {
-        continue;
-      }
-      for (int strand = 0; strand < 2; ++strand, adapter.ReverseComplement()) {
-        if (PrevSimplePathAdapter(adapter).IsValid()) {
-          continue;
-        }
-        if (!locks.try_lock(i)) {
-          break;
-        }
-        std::vector<SudoVertexAdapter> linear_path;
-        for (auto cur = NextSimplePathAdapter(adapter); cur.IsValid();
-            cur = NextSimplePathAdapter(cur)) {
-          linear_path.emplace_back(cur);
-        }
-
-        if (linear_path.empty()) {
-          adapter.SetFlag(kVisited);
-          break;
-        }
-
-        size_type back_id = linear_path.back().UnitigId();
-        if (back_id != i && !locks.try_lock(back_id)) {
-          if (back_id > i) {
-            locks.unlock(i);
-            break;
-          } else {
-            locks.lock(back_id);
-          }
-        }
-
-        auto new_length = adapter.GetLength();
-        auto new_total_depth = adapter.GetTotalDepth();
-        adapter.SetFlag(kVisited);
-
-        for (auto &v : linear_path) {
-          new_length += v.GetLength();
-          new_total_depth += v.GetTotalDepth();
-          if (v.canonical_id() != adapter.canonical_id()) v.SetFlag(kDeleted);
-        }
-
-        auto new_start = adapter.b();
-        auto new_rc_end = adapter.re();
-        auto new_rc_start = linear_path.back().rb();
-        auto new_end = linear_path.back().e();
-
-        adapter.SetBeginEnd(new_start, new_end, new_rc_start, new_rc_end);
-        adapter.SetLength(new_length);
-        adapter.SetTotalDepth(new_total_depth);
-        if (set_changed) adapter.SetChanged();
-        break;
-      }
-    }
-
-    // looped path
-    std::mutex mutex;
-  #pragma omp parallel for
-    for (size_type i = 0; i < vertices_.size(); ++i) {
-      auto adapter = MakeSudoAdapter(i);
-      if (!adapter.IsStandalone() && !adapter.GetFlag()) {
-        std::lock_guard<std::mutex> lk(mutex);
-        if (adapter.GetFlag()) {
-          continue;
-        }
-
-        uint32_t length = adapter.GetLength();
-        uint64_t total_depth = adapter.GetTotalDepth();
-        SudoVertexAdapter next_adapter = adapter;
-        while (true) {
-          next_adapter = NextSimplePathAdapter(next_adapter);
-          assert(next_adapter.IsValid());
-          if (next_adapter.b() == adapter.b()) {
-            break;
-          }
-          next_adapter.SetFlag(kDeleted);
-          length += next_adapter.GetLength();
-          total_depth += next_adapter.GetTotalDepth();
-        }
-
-        auto new_start = adapter.b();
-        auto new_end = sdbg_->PrevSimplePathEdge(new_start);
-        auto new_rc_end = adapter.re();
-        auto new_rc_start = sdbg_->NextSimplePathEdge(new_rc_end);
-        assert(new_start == sdbg_->EdgeReverseComplement(new_rc_end));
-        assert(new_end == sdbg_->EdgeReverseComplement(new_rc_start));
-
-        adapter.SetBeginEnd(new_start, new_end, new_rc_start, new_rc_end);
-        adapter.SetLength(length);
-        adapter.SetTotalDepth(total_depth);
-        adapter.SetLooped();
-        if (set_changed) adapter.SetChanged();
-      }
-    }
-
-    vertices_.resize(std::remove_if(vertices_.begin(), vertices_.end(),
-                                    [](UnitigGraphVertex &a) {
-                                      return SudoVertexAdapter(a).GetFlag() &
-                                            kDeleted;
-                                    }) - vertices_.begin());
-    
-    vertices_size = vertices_.size();
-  } // rank == 0
-
-  double start_time = 0.0, end_time = 0.0;
-  if (rank == 0) {
-      start_time = MPI_Wtime();  // 记录开始时间（仅 Rank 0）
-  }
-
-  MPI_Bcast(&vertices_size, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
-  if (rank != 0) {
-    vertices_.resize(vertices_size);
-  }
-  UnitigGraph::Mpi_Bcast_vertices();
-
-  if (rank == 0) {
-      end_time = MPI_Wtime();  // 记录结束时间（仅 Rank 0）
-      xinfo("MPI Mpi_Bcast_vertices Elapsed time: {}\n", (end_time - start_time));
-  }
-  size_type num_changed = 0;
-#pragma omp parallel for reduction(+ : num_changed)
-  for (size_type i = 0; i < vertices_.size(); ++i) {
-    auto adapter = MakeSudoAdapter(i);
-    assert(adapter.IsStandalone() || adapter.GetFlag());
-    adapter.SetFlag(0);
-    id_map_.at(adapter.b()) = i;
-    id_map_.at(adapter.rb()) = i;
-    num_changed += adapter.IsChanged();
-  }
-}
-
 void UnitigGraph::Refresh(bool set_changed) {
   static const uint8_t kDeleted = 0x1;
   static const uint8_t kVisited = 0x2;
   RefreshDisconnected();
+
+  //show_info(mpienv_.rank);
 #pragma omp parallel for
   for (size_type i = 0; i < vertices_.size(); ++i) {
     auto adapter = MakeSudoAdapter(i);
@@ -422,10 +262,8 @@ void UnitigGraph::Refresh(bool set_changed) {
     }
   }
 
-  //vertices_sort();
-  //show_info(mpienv_.rank);
   AtomicBitVector locks(size());
-#pragma omp parallel for
+#pragma omp parallel for schedule(dynamic, 128)
   for (size_type i = 0; i < vertices_.size(); ++i) {
     auto adapter = MakeSudoAdapter(i);
     if (adapter.IsStandalone() || (adapter.GetFlag() & kDeleted)) {
@@ -449,9 +287,18 @@ void UnitigGraph::Refresh(bool set_changed) {
         break;
       }
 
+      //size_type back_id = linear_path.back().UnitigId();
+      //if (back_id != i && !locks.try_lock(back_id)) {
+      //  if (back_id > i) {
+      //    locks.unlock(i);
+      //    break;
+      //  } else {
+      //    locks.lock(back_id);
+      //  }
+      //}
       size_type back_id = linear_path.back().UnitigId();
-      if (back_id != i && !locks.try_lock(back_id)) {
-        if (back_id > i) {
+      if (back_id != i) {
+        if (back_id < i) {
           locks.unlock(i);
           break;
         } else {
@@ -483,12 +330,12 @@ void UnitigGraph::Refresh(bool set_changed) {
   }
 
   // looped path
-  std::mutex mutex;
-#pragma omp parallel for
+  //std::mutex mutex;
+//#pragma omp parallel for
   for (size_type i = 0; i < vertices_.size(); ++i) {
     auto adapter = MakeSudoAdapter(i);
     if (!adapter.IsStandalone() && !adapter.GetFlag()) {
-      std::lock_guard<std::mutex> lk(mutex);
+      //std::lock_guard<std::mutex> lk(mutex);
       if (adapter.GetFlag()) {
         continue;
       }
@@ -530,7 +377,6 @@ void UnitigGraph::Refresh(bool set_changed) {
                    vertices_.begin());
 
   size_type num_changed = 0;
-  //vertices_sort();
 #pragma omp parallel for reduction(+ : num_changed)
   for (size_type i = 0; i < vertices_.size(); ++i) {
     auto adapter = MakeSudoAdapter(i);
@@ -538,6 +384,7 @@ void UnitigGraph::Refresh(bool set_changed) {
     adapter.SetFlag(0);
     id_map_.at(adapter.b()) = i;
     id_map_.at(adapter.rb()) = i;
+    //strand_map_.at(adapter.rb()) = adapter.b();
     num_changed += adapter.IsChanged();
   }
 }
@@ -698,37 +545,53 @@ void UnitigGraph::UniGather() {
   MPI_Type_commit(&MPI_vertices);
 
   // Step 1: gather local sizes as MPI_Count
-  MPI_Count local_count = static_cast<MPI_Count>(vertices_.size());
-  std::vector<MPI_Count> recv_counts(mpienv_.nprocs);
-  MPI_Allgather_c(&local_count, 1, MPI_COUNT, recv_counts.data(), 1, MPI_COUNT, MPI_COMM_WORLD);
+  uint32_t local_count = vertices_.size();
+  std::vector<uint32_t> recv_counts(mpienv_.nprocs);
+  std::vector<bool> ischunk(mpienv_.nprocs);
+  int32_t CHUNK = INT_MAX;
+  MPI_Allgather(&local_count, 1, MPI_UINT32_T, recv_counts.data(), 1, MPI_UINT32_T, MPI_COMM_WORLD);
 
   // Step 2: compute displacements
-  std::vector<MPI_Count> displs(mpienv_.nprocs, 0);
-  MPI_Count total_count = 0;
+  std::vector<uint32_t> displs(mpienv_.nprocs, 0);
+  uint32_t total_count = 0;
   for (int i = 0; i < mpienv_.nprocs; ++i) {
     displs[i] = total_count;
     total_count += recv_counts[i];
+    if (recv_counts[i] > INT_MAX) ischunk[i] = true; 
   }
 
-  // Step 3: resize vertices_ to hold all gathered data
-  MPI_Count old_local_count = local_count;
-  vertices_.resize(total_count);
 
-  // Step 4: move local data to correct offset if using IN_PLACE
-  if (displs[mpienv_.rank] != 0) {
-    std::memmove(
-      vertices_.data() + displs[mpienv_.rank],
-      vertices_.data(),
-      old_local_count * sizeof(UnitigGraphVertex)
-    );
+  // Step 3: resize root vertices_ to hold all gathered data
+  if (mpienv_.rank == 0) {
+    vertices_.resize(total_count);
+    for (uint32_t i = 1; i < mpienv_.nprocs; ++i) {
+      if (ischunk[i]) {
+        for (uint32_t offset = 0; offset < recv_counts[i]; offset += CHUNK) {
+          int32_t chunk_size = std::min(CHUNK, static_cast<int32_t>(recv_counts[i] - offset));
+          MPI_Recv(vertices_.data() + displs[i] + offset, chunk_size, MPI_vertices, i, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }
+      } else {
+        MPI_Recv(vertices_.data() + displs[i], recv_counts[i], MPI_vertices, i, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+      }
+      
+    }
+  } else {
+    // 非0号进程发送数据
+    if (ischunk[mpienv_.rank]) {
+      for (uint32_t offset = 0; offset < local_count; offset += CHUNK) {
+        int32_t chunk_size = std::min(CHUNK, static_cast<int32_t>(local_count - offset));
+        MPI_Send(vertices_.data() + offset, chunk_size, MPI_vertices, 0, 1, MPI_COMM_WORLD);
+      }
+    } else {
+      MPI_Send(vertices_.data(), local_count, MPI_vertices, 0, 1, MPI_COMM_WORLD);
+    }
+    vertices_.resize(total_count);
   }
 
-  // Step 5: use IN_PLACE gather
-  MPI_Allgatherv_c(
-    MPI_IN_PLACE, 0, MPI_DATATYPE_NULL,         // sendbuf ignored
-    vertices_.data(), recv_counts.data(), displs.data(),
-    MPI_vertices, MPI_COMM_WORLD
-  );
+  for (uint32_t offset = 0; offset < total_count; offset += CHUNK) {
+    int32_t chunk_size = std::min(CHUNK, static_cast<int32_t>(total_count - offset));
+    MPI_Bcast(vertices_.data() + offset, chunk_size, MPI_vertices, 0, MPI_COMM_WORLD);
+  }
 
   MPI_Type_free(&MPI_vertices);
 }
@@ -773,41 +636,24 @@ size_t UnitigGraph::vertices_size() {
 }
 
 uint32_t UnitigGraph::VerticesIndexWithSdbgId(uint64_t sdbg_id) {
+    // 判断是否在 hash map 中存在
+    uint64_t search_id = sdbg_id;
+    //auto map_it = strand_map_.find(sdbg_id);
+    //if (map_it != strand_map_.end()) {
+    //    search_id = map_it->second;
+    //}
+    //printf("sdbg_id: {%ld};search_id: {%d}\n", sdbg_id, search_id);
     auto it = std::lower_bound(
-        vertices_.begin(), vertices_.end(), sdbg_id,
+        vertices_.begin(), vertices_.end(), search_id,
         [](const UnitigGraphVertex& node, uint64_t value) {
             return node.strand_info[0].begin < value;
         });
 
-    if (it != vertices_.end() && it->strand_info[0].begin == sdbg_id) {
+    if (it != vertices_.end() && it->strand_info[0].begin == search_id) {
         return static_cast<int>(std::distance(vertices_.begin(), it));
     }
 
-    // 试图查找反向互补
-    uint64_t prev_edge;
-    uint64_t rc_sdbg_id = sdbg_->EdgeReverseComplement(sdbg_id);
-    while ((prev_edge = sdbg_->PrevSimplePathEdge(rc_sdbg_id)) !=
-            SDBG::kNullID) {
-        rc_sdbg_id = prev_edge;
-    }
-    //printf("rc_sdbg_id: {%ld};sdbg_id: {%d}\n", rc_sdbg_id, sdbg_id);
-    it = std::lower_bound(
-        vertices_.begin(), vertices_.end(), rc_sdbg_id,
-        [](const UnitigGraphVertex& node, uint64_t value) {
-            return node.strand_info[0].begin < value;
-        });
-
-    if (it != vertices_.end() && it->strand_info[0].begin == rc_sdbg_id) {
-        return static_cast<int>(std::distance(vertices_.begin(), it));
-    }
-
-    uint64_t last_sdbg_id = sdbg_->EdgeReverseComplement(rc_sdbg_id);
-    while ((prev_edge = sdbg_->PrevSimplePathEdge(last_sdbg_id)) !=
-            SDBG::kNullID) {
-        last_sdbg_id = prev_edge;
-    }
-    return last_sdbg_id;
     // 一定不能到这
     assert(false && "BUG: sdbg_id not found in VerticesIndexWithSdbgId()");
-    return -1;  // 只为了编译器警告消除
+    return -1;
 }

@@ -19,10 +19,10 @@ add_subdirectory(thirdparty/oneTBB-2022.2.0)
 #else ()
 #endif ()
 
-option(ZLIB_ENABLE_TESTS "" OFF)
-option(ZLIB_COMPAT "" ON)
+#option(ZLIB_ENABLE_TESTS "" OFF)
+#option(ZLIB_COMPAT "" ON)
 
-add_subdirectory(thirdparty/zlib-ng-2.2.4)
+#add_subdirectory(thirdparty/zlib-ng-2.2.4)
 
 set(CMAKE_C_COMPILER mpicc)
 set(CMAKE_CXX_COMPILER mpicxx)
@@ -54,7 +54,7 @@ if (STATIC_BUILD)
     set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
 endif (STATIC_BUILD)
 
-#find_package(ZLIB REQUIRED)
+find_package(ZLIB REQUIRED)
 find_package(OpenMP REQUIRED)
 
 
@@ -93,9 +93,9 @@ add_executable(mpimeta_core_no_hw_accel ${OTHER_SOURCE} ${SDBG_SOURCE} ${SEQ_SOU
 set_target_properties(mpimeta_core PROPERTIES COMPILE_FLAGS "-mbmi2 -DUSE_BMI2 -mpopcnt")
 set_target_properties(mpimeta_core_popcnt PROPERTIES COMPILE_FLAGS "-mpopcnt")
 
-#target_link_libraries(mpimeta_core ${ZLIB_LIBRARIES})
-#target_link_libraries(mpimeta_core_popcnt ${ZLIB_LIBRARIES})
-#target_link_libraries(mpimeta_core_no_hw_accel ${ZLIB_LIBRARIES})
+target_link_libraries(mpimeta_core ${ZLIB_LIBRARIES})
+target_link_libraries(mpimeta_core_popcnt ${ZLIB_LIBRARIES})
+target_link_libraries(mpimeta_core_no_hw_accel ${ZLIB_LIBRARIES})
 
 target_link_libraries(mpimeta_core 
 		ga
@@ -104,7 +104,6 @@ target_link_libraries(mpimeta_core
 		armci
 		comex
 		fmt::fmt
-		zlib
 		TBB::tbb)
 target_link_libraries(mpimeta_core_popcnt 
 		ga
@@ -113,7 +112,6 @@ target_link_libraries(mpimeta_core_popcnt
 		armci
 		comex
 		fmt::fmt
-		zlib
 		TBB::tbb)
 target_link_libraries(mpimeta_core_no_hw_accel 
 		ga
@@ -122,12 +120,11 @@ target_link_libraries(mpimeta_core_no_hw_accel
 		m
 		comex
 		fmt::fmt
-		zlib
 		TBB::tbb)
 
-target_include_directories(mpimeta_core PRIVATE thirdparty/zlib-ng-2.2.4)
-target_include_directories(mpimeta_core_popcnt PRIVATE thirdparty/zlib-ng-2.2.4)
-target_include_directories(mpimeta_core_no_hw_accel PRIVATE thirdparty/zlib-ng-2.2.4)
+#target_include_directories(mpimeta_core PRIVATE thirdparty/zlib-ng-2.2.4)
+#target_include_directories(mpimeta_core_popcnt PRIVATE thirdparty/zlib-ng-2.2.4)
+#target_include_directories(mpimeta_core_no_hw_accel PRIVATE thirdparty/zlib-ng-2.2.4)
 target_include_directories(mpimeta_core PRIVATE thirdparty/oneTBB-2022.2.0/include)
 target_include_directories(mpimeta_core_popcnt PRIVATE thirdparty/oneTBB-2022.2.0/include)
 target_include_directories(mpimeta_core_no_hw_accel PRIVATE thirdparty/oneTBB-2022.2.0/include)

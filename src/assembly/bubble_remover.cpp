@@ -128,31 +128,113 @@ int BaseBubbleRemover::SearchAndPopBubble(UnitigGraph &graph,
   return num_removed;
 }
 
+int BaseBubbleRemover::SearchAndPopBubble(UnitigGraph &graph,
+                                          UnitigGraph::VertexAdapter &adapter,
+                                          uint32_t max_len,
+                                          const checker_type &checker,
+                                          AtomicBitVector &to_delete) {
+  UnitigGraph::VertexAdapter right;
+  UnitigGraph::VertexAdapter middle[4];
+  UnitigGraph::VertexAdapter possible_right[4];
+
+  int degree = graph.GetNextAdapters(adapter, middle);
+  if (degree <= 1) {
+    return 0;
+  }
+  for (int j = 0; j < degree; ++j) {
+    if (middle[j].GetLength() > max_len) {
+      return 0;
+    }
+  }
+  for (int j = 0; j < degree; ++j) {
+    if (graph.InDegree(middle[j]) != 1 ||
+        graph.GetNextAdapters(middle[j], possible_right) != 1) {
+      return 0;
+    }
+    if (j == 0) {
+      right = possible_right[0];
+      if (right.canonical_id() < adapter.canonical_id() ||
+          graph.InDegree(right) != degree) {
+        return 0;
+      }
+    } else {
+      if (right.b() != possible_right[0].b()) {
+        return 0;
+      }
+    }
+  }
+  std::sort(middle, middle + degree,
+            [](const UnitigGraph::VertexAdapter &a,
+               const UnitigGraph::VertexAdapter &b) {
+              if (a.GetAvgDepth() != b.GetAvgDepth())
+                return a.GetAvgDepth() > b.GetAvgDepth();
+              return a.canonical_id() < b.canonical_id();
+            });
+
+  for (int j = 1; j < degree; ++j) {
+    if (!checker(middle[0], middle[j])) {
+      return 0;
+    }
+  }
+  bool careful_merged = false;
+  int num_removed = 0;
+  for (int j = 1; j < degree; ++j) {
+    //bool success = middle[j].SetToDelete();
+    to_delete.set(middle[j].UnitigId());
+    //assert(success || adapter.canonical_id() == right.canonical_id() ||
+    //       adapter.IsPalindrome());
+    num_removed += 1;
+    if (bubble_file_ && middle[j].GetAvgDepth() >=
+                            middle[0].GetAvgDepth() * careful_threshold_) {
+      std::string label = graph.VertexToDNAString(middle[j]);
+      bubble_file_->WriteContig(label, graph.k(), 0, 0,
+                                middle[j].GetAvgDepth());
+      careful_merged = true;
+    }
+  }
+  if (careful_merged) {
+    std::string left_label = graph.VertexToDNAString(adapter);
+    std::string right_label = graph.VertexToDNAString(right);
+    bubble_file_->WriteContig(left_label, graph.k(), 0, 0,
+                              adapter.GetAvgDepth());
+    bubble_file_->WriteContig(right_label, graph.k(), 0, 0,
+                              right.GetAvgDepth());
+  }
+  return num_removed;
+}
+
 size_t BaseBubbleRemover::PopBubbles(UnitigGraph &graph, bool permanent_rm,
                                      uint32_t max_len,
                                      const checker_type &checker, MPIEnviroment &mpienv) {
   uint32_t num_removed = 0;
-  
-  //计算待处理数据数量和进程数的商
-  int64_t num_edges_mean = graph.size() / mpienv.nprocs;
-  //计算待处理数据数量和进程数的余数
-  int64_t remain = graph.size() % mpienv.nprocs;         
-  //每个进程计算自己所要处理的数据对应索引起止范围
-  int64_t start_index = mpienv.rank * num_edges_mean + (mpienv.rank < remain ? mpienv.rank : remain);
-  int64_t end_index = start_index + num_edges_mean + (mpienv.rank < remain ? 1 : 0);
+  AtomicBitVector to_delete(graph.size());
+  //int64_t num_edges_mean = graph.size() / mpienv.nprocs;
+  //int64_t remain = graph.size() % mpienv.nprocs;         
+  //int64_t start_index = mpienv.rank * num_edges_mean + (mpienv.rank < remain ? mpienv.rank : remain);
+  //int64_t end_index = start_index + num_edges_mean + (mpienv.rank < remain ? 1 : 0);
 #pragma omp parallel for reduction(+ : num_removed)
-  for (UnitigGraph::size_type i = 0; i < graph.size(); ++i) {
+  for (UnitigGraph::size_type i = mpienv.rank; i < graph.size(); i += mpienv.nprocs) {
     UnitigGraph::VertexAdapter adapter = graph.MakeVertexAdapter(i);
     if (adapter.IsStandalone()) {
       continue;
     }
     for (int strand = 0; strand < 2; ++strand, adapter.ReverseComplement()) {
-      num_removed += SearchAndPopBubble(graph, adapter, max_len, checker);
+      num_removed += SearchAndPopBubble(graph, adapter, max_len, checker, to_delete);
+      //num_removed += SearchAndPopBubble(graph, adapter, max_len, checker);
     }
   }
 
-  //MPI_Allreduce(MPI_IN_PLACE, &num_removed, 1, MPI_UINT32_T, MPI_SUM, MPI_COMM_WORLD);
-  //graph.Mpi_Allreduce_vertices();
+  MPI_Allreduce(MPI_IN_PLACE, &num_removed, 1, MPI_UINT32_T, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE, to_delete.data_array_.data(), to_delete.data_array_.size(), MPI_UINT64_T, MPI_BOR, MPI_COMM_WORLD);
+
+#pragma omp parallel for
+  for (UnitigGraph::size_type i = 0; i < graph.size(); ++i) {
+    if (to_delete.at(i)) {
+      auto adapter = graph.MakeVertexAdapter(i);
+      adapter.SetToDelete();
+    }
+  }
+
   graph.Refresh(!permanent_rm);
   return num_removed;
 }

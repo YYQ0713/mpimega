@@ -36,6 +36,9 @@ class BaseBubbleRemover {
   int SearchAndPopBubble(UnitigGraph &graph,
                          UnitigGraph::VertexAdapter &adapter, uint32_t max_len,
                          const checker_type &checker);
+  int SearchAndPopBubble(UnitigGraph &graph,
+                         UnitigGraph::VertexAdapter &adapter, uint32_t max_len,
+                         const checker_type &checker, AtomicBitVector &to_delete);
 };
 
 class NaiveBubbleRemover : public BaseBubbleRemover {

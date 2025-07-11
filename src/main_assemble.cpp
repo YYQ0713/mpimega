@@ -253,7 +253,6 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
   ParseAsmOption(argc, argv, opt);
   SDBG dbg;
   SimpleTimer timer;
-  size_t vtx_size;
 
   // graph loading
   timer.reset();
@@ -335,7 +334,6 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
             num_bubbles, timer.elapsed());
       changed |= num_bubbles > 0;
     }
-    
     // remove complex bubbles
     if (opt.bubble_level >= 2) {
       timer.reset();
@@ -353,7 +351,7 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
     uint32_t num_disconnected =
         DisconnectWeakLinks(graph, mpienv, opt.disconnect_ratio);
     timer.stop();
-    xinfo("Number unitigs disconnected: {} (have redundancy), time: {.3}\n", num_disconnected,
+    xinfo("Number unitigs disconnected: {}, time: {.3}\n", num_disconnected,
           timer.elapsed());
     changed |= num_disconnected > 0;
     
@@ -416,26 +414,25 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
   if (opt.prune_level >= 1) {
     //ContigWriter addi_contig_writer(opt.addi_contig_file());
     MPIContigWriter mpi_addi_contig_writer(opt.addi_contig_file(), mpienv.rank);
-    //if (mpienv.rank == 0) {
-      timer.reset();
-      timer.start();
-      uint32_t num_removed = IterateLocalLowDepth(
-          graph, opt.min_depth, opt.max_tip_len, opt.local_width,
-          opt.low_local_ratio, mpienv, opt.is_final_round);
 
-      uint32_t n_bubbles = 0;
-      if (opt.bubble_level >= 2 && opt.merge_len > 0) {
-        complex_bubble_remover.SetWriter(nullptr);
-        n_bubbles = complex_bubble_remover.PopBubbles(graph, false, mpienv);
-        timer.stop();
-      }
-      xinfo(
-          "Number of local low depth unitigs removed: {}, complex bubbles "
-          "removed: {}, time: {}\n",
-          num_removed, n_bubbles, timer.elapsed());
-      CalcAndPrintStat(graph);
-      //vtx_size = graph.vertices_size();
-    //}
+    timer.reset();
+    timer.start();
+    uint32_t num_removed = IterateLocalLowDepth(
+        graph, opt.min_depth, opt.max_tip_len, opt.local_width,
+        opt.low_local_ratio, mpienv, opt.is_final_round);
+
+    uint32_t n_bubbles = 0;
+    if (opt.bubble_level >= 2 && opt.merge_len > 0) {
+      complex_bubble_remover.SetWriter(nullptr);
+      n_bubbles = complex_bubble_remover.PopBubbles(graph, false, mpienv);
+      timer.stop();
+    }
+    xinfo(
+        "Number of local low depth unitigs removed: {}, complex bubbles "
+        "removed: {}, time: {}\n",
+        num_removed, n_bubbles, timer.elapsed());
+    CalcAndPrintStat(graph);
+
 
     //timer.reset();
     //timer.start();

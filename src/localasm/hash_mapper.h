@@ -42,8 +42,8 @@ struct MappingRecord {
 
 class HashMapper {
  public:
+ //using TMapper = phmap::flat_hash_map<TKmer, uint64_t, KmerHash>;
   using TKmer = Kmer<2, uint32_t>;
-  //using TMapper = phmap::flat_hash_map<TKmer, uint64_t, KmerHash>;
   using TMapper = phmap::parallel_flat_hash_map<TKmer, uint64_t, KmerHash>;
   void LoadAndBuild(const std::string &contig_file, int32_t min_len,
                     int32_t seed_kmer_size, int32_t sparsity);

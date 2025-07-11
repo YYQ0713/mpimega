@@ -33,7 +33,6 @@ class UnitigGraph {
 
  public:
   void Refresh(bool mark_changed = false);
-  void MPIRefresh(bool mark_changed = false, int rank = -1);
   void Mpi_Allreduce_vertices();
   void Mpi_Bcast_vertices();
   void UniGather();
@@ -177,6 +176,7 @@ class UnitigGraph {
   std::vector<UnitigGraphVertex> loop_vertices_;
   //phmap::flat_hash_map<uint64_t, size_type> id_map_;
   spp::sparse_hash_map<uint64_t, size_type> id_map_;
+  //spp::sparse_hash_map<uint64_t, uint64_t> strand_map_;
   AdapterImpl<VertexAdapter> adapter_impl_;
   AdapterImpl<SudoVertexAdapter> sudo_adapter_impl_;
 };
