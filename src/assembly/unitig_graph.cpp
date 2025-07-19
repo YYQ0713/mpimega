@@ -51,13 +51,13 @@ UnitigGraph::UnitigGraph(SDBG *sdbg, MPIEnviroment &mpienv)
       uint64_t rc_end;
       assert(rc_start != SDBG::kNullID);
 
-      auto rc_tmp = sdbg_->EdgeReverseComplement(cur_edge);
-      //if (!locks.try_lock(rc_start)) {
-      if (std::max(edge_idx, cur_edge) < std::max(rc_start, rc_tmp)) {
+      if (!locks.try_lock(rc_start)) {
+        rc_end = sdbg_->EdgeReverseComplement(cur_edge);
+        if (std::max(edge_idx, cur_edge) < std::max(rc_start, rc_end)) {
           will_be_added = false;
+        }
       } else {
         // lock through the rc path
-        locks.try_lock(rc_start);
         uint64_t rc_cur_edge = rc_start;
         rc_end = rc_cur_edge;
         bool extend_full = true;
@@ -75,11 +75,18 @@ UnitigGraph::UnitigGraph(SDBG *sdbg, MPIEnviroment &mpienv)
         }
       }
 
+      if (will_be_added && (rc_end % mpienv.nprocs != mpienv.rank)) {
+        if (std::max(edge_idx, cur_edge) < std::max(rc_start, rc_end)) {
+          will_be_added = false;
+        }
+      }
+
       if (will_be_added) {
+        count_palindrome += cur_edge == rc_start;
         std::lock_guard<SpinLock> lk(path_lock);
         vertices_.emplace_back(cur_edge, edge_idx, rc_start, rc_end, depth,
                                length);
-        count_palindrome += cur_edge == rc_start;
+        //count_palindrome += cur_edge == rc_start;
       }
     }
   }
@@ -125,6 +132,9 @@ UnitigGraph::UnitigGraph(SDBG *sdbg, MPIEnviroment &mpienv)
   }
   xinfo("Graph size of loops: {}, count_loop: {}\n", loop_vertices_.size(), count_loop);
   sdbg_->FreeMultiplicity();
+  MPI_Barrier(MPI_COMM_WORLD);
+  size_t vmrss_kb = getCurrentRSS_kb();
+  xinfo("Build uni graph befor gather and freeMulti currentRSS: {} KB\n", vmrss_kb);
   UniGather();
 
   vertices_.reserve(vertices_.size() + loop_vertices_.size());
@@ -135,7 +145,6 @@ UnitigGraph::UnitigGraph(SDBG *sdbg, MPIEnviroment &mpienv)
 
   xinfo("Graph size without loops: {}, palindrome: {}\n", vertices_.size(), count_palindrome);
 
-  //vertices_sort();
   //show_info(mpienv.rank);
   //MPI_Barrier(MPI_COMM_WORLD); // Barrier
   //exit(0);
@@ -148,7 +157,6 @@ UnitigGraph::UnitigGraph(SDBG *sdbg, MPIEnviroment &mpienv)
   }
   
   id_map_.reserve(vertices_.size() * 2 - count_palindrome);
-  //strand_map_.reserve(vertices_.size());
 
   for (size_type i = 0; i < vertices_.size(); ++i) {
     VertexAdapter adapter(vertices_[i]);
@@ -156,8 +164,9 @@ UnitigGraph::UnitigGraph(SDBG *sdbg, MPIEnviroment &mpienv)
     id_map_[adapter.b()] = i;
     id_map_[adapter.rb()] = i;
   }
+  vmrss_kb = getCurrentRSS_kb();
+  xinfo("Build uni graph and idmap currentRSS: {} KB\n", vmrss_kb);
   assert(vertices_.size() * 2 - count_palindrome >= id_map_.size());
-  //assert(vertices_.size() >= strand_map_.size());
 }
 
 void UnitigGraph::RefreshDisconnected() {
@@ -263,7 +272,7 @@ void UnitigGraph::Refresh(bool set_changed) {
   }
 
   AtomicBitVector locks(size());
-#pragma omp parallel for schedule(dynamic, 128)
+#pragma omp parallel for
   for (size_type i = 0; i < vertices_.size(); ++i) {
     auto adapter = MakeSudoAdapter(i);
     if (adapter.IsStandalone() || (adapter.GetFlag() & kDeleted)) {
@@ -384,7 +393,6 @@ void UnitigGraph::Refresh(bool set_changed) {
     adapter.SetFlag(0);
     id_map_.at(adapter.b()) = i;
     id_map_.at(adapter.rb()) = i;
-    //strand_map_.at(adapter.rb()) = adapter.b();
     num_changed += adapter.IsChanged();
   }
 }
@@ -449,13 +457,13 @@ void UnitigGraph::Mpi_Allreduce_vertices() {
 
   // 定义每个字段的偏移量
   MPI_Aint displacements[kFieldCount];
-  displacements[0] = offsetof(UnitigGraphVertex, strand_info);
-  displacements[1] = offsetof(UnitigGraphVertex, total_depth);
-  displacements[2] = offsetof(UnitigGraphVertex, length);
-  displacements[3] = offsetof(UnitigGraphVertex, is_looped);
-  displacements[4] = offsetof(UnitigGraphVertex, is_palindrome);
-  displacements[5] = offsetof(UnitigGraphVertex, is_changed);
-  displacements[6] = offsetof(UnitigGraphVertex, flag);
+  displacements[0] = 0;
+  displacements[1] = 24;
+  displacements[2] = 32;
+  displacements[3] = 36;
+  displacements[4] = 37;
+  displacements[5] = 38;
+  displacements[6] = 39;
 
   // 定义每个字段的 MPI 数据类型
   MPI_Datatype types[kFieldCount] = {
@@ -489,13 +497,13 @@ void UnitigGraph::Mpi_Bcast_vertices() {
 
   // 定义每个字段的偏移量
   MPI_Aint displacements[kFieldCount];
-  displacements[0] = offsetof(UnitigGraphVertex, strand_info);
-  displacements[1] = offsetof(UnitigGraphVertex, total_depth);
-  displacements[2] = offsetof(UnitigGraphVertex, length);
-  displacements[3] = offsetof(UnitigGraphVertex, is_looped);
-  displacements[4] = offsetof(UnitigGraphVertex, is_palindrome);
-  displacements[5] = offsetof(UnitigGraphVertex, is_changed);
-  displacements[6] = offsetof(UnitigGraphVertex, flag);
+  displacements[0] = 0;
+  displacements[1] = 24;
+  displacements[2] = 32;
+  displacements[3] = 36;
+  displacements[4] = 37;
+  displacements[5] = 38;
+  displacements[6] = 39;
 
   // 定义每个字段的 MPI 数据类型
   MPI_Datatype types[kFieldCount] = {
@@ -521,15 +529,15 @@ void UnitigGraph::UniGather() {
   MPI_Datatype MPI_vertices;
 
   const int kFieldCount = 7;
-  int block_lengths[kFieldCount] = {4, 1, 1, 1, 1, 1, 1};
+  int block_lengths[kFieldCount] = {3, 1, 1, 1, 1, 1, 1};
   MPI_Aint displacements[kFieldCount];
-  displacements[0] = offsetof(UnitigGraphVertex, strand_info);
-  displacements[1] = offsetof(UnitigGraphVertex, total_depth);
-  displacements[2] = offsetof(UnitigGraphVertex, length);
-  displacements[3] = offsetof(UnitigGraphVertex, is_looped);
-  displacements[4] = offsetof(UnitigGraphVertex, is_palindrome);
-  displacements[5] = offsetof(UnitigGraphVertex, is_changed);
-  displacements[6] = offsetof(UnitigGraphVertex, flag);
+  displacements[0] = 0;
+  displacements[1] = 24;
+  displacements[2] = 32;
+  displacements[3] = 36;
+  displacements[4] = 37;
+  displacements[5] = 38;
+  displacements[6] = 39;
 
   MPI_Datatype types[kFieldCount] = {
     MPI_UINT64_T,

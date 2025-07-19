@@ -22,6 +22,10 @@ class BaseAsyncSequenceReader {
     AsyncReadNextBatch();
     return *ret;
   }
+  package_type &NextSync() {
+    ReadOneBatch(&sync_package_);
+    return sync_package_;
+  }
 
  protected:
   void AsyncReadNextBatch() {
@@ -38,6 +42,7 @@ class BaseAsyncSequenceReader {
  private:
   unsigned batch_index_{0};
   package_type packages_[2];
+  package_type sync_package_;
   std::future<package_type *> next_pkg_;
 };
 

@@ -963,6 +963,8 @@ int main(int argc, char **argv) {
     }
 
     MPI_Barrier(MPI_COMM_WORLD); // Barrier
+    size_t vmrss_kb = getCurrentRSS_kb();
+    xinfo("before build_first_graph currentRSS: {} KB\n", vmrss_kb);
     build_first_graph(opt);
 
     MPI_Barrier(MPI_COMM_WORLD); // Barrier

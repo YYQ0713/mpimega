@@ -7,10 +7,10 @@
 
 uint32_t DisconnectWeakLinks(UnitigGraph &graph, MPIEnviroment &mpienv, double local_ratio = 0.1) {
   uint32_t num_disconnected = 0;
-  int64_t num_edges_mean = graph.size() / mpienv.nprocs;
-  int64_t remain = graph.size() % mpienv.nprocs;
-  int64_t start_index = mpienv.rank * num_edges_mean + (mpienv.rank < remain ? mpienv.rank : remain);
-  int64_t end_index = start_index + num_edges_mean + (mpienv.rank < remain ? 1 : 0);
+  // int64_t num_edges_mean = graph.size() / mpienv.nprocs;
+  // int64_t remain = graph.size() % mpienv.nprocs;
+  // int64_t start_index = mpienv.rank * num_edges_mean + (mpienv.rank < remain ? mpienv.rank : remain);
+  // int64_t end_index = start_index + num_edges_mean + (mpienv.rank < remain ? 1 : 0);
 
 #pragma omp parallel for reduction(+ : num_disconnected)
   for (UnitigGraph::size_type i = 0; i < graph.size(); ++i) {

@@ -33,9 +33,9 @@ class UnitigGraphVertex {
  public:
   struct StrandInfo {
     StrandInfo(uint64_t begin = 0, uint64_t end = 0) : begin(begin), end(end) {}
-    uint64_t begin;
-    uint64_t end;
-  };
+    uint64_t begin : 48;
+    uint64_t end : 48;
+  }__attribute__((packed));
   StrandInfo strand_info[2];
   uint64_t total_depth;
   uint32_t length;
@@ -151,6 +151,6 @@ class UnitigGraphVertex {
   };
 };
 
-static_assert(sizeof(UnitigGraphVertex) <= 48, "");
+static_assert(sizeof(UnitigGraphVertex) <= 40, "");
 
 #endif  // MEGAHIT_UNITIG_GRAPH_VERTEX_H

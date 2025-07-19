@@ -462,6 +462,36 @@ class SDBG {
 
     return kNullID;
   }
+  uint64_t ERC(uint64_t edge_id) const {
+
+    uint8_t seq[kMaxK + 1];
+    GetLabel(edge_id, seq);
+    seq[k_] = GetW(edge_id);
+
+    if (seq[k_] > kAlphabetSize) {
+      seq[k_] -= kAlphabetSize;
+    }
+
+    for (int i = 0, j = k_; i < j; ++i, --j) {
+      std::swap(seq[i], seq[j]);
+    }
+    for (unsigned i = 0; i < k_ + 1; ++i) {
+      seq[i] = kAlphabetSize + 1 - seq[i];
+    }
+
+    uint64_t rev_node = IndexBinarySearch(seq);
+    if (rev_node == kNullID) return kNullID;
+    do {
+      uint8_t edge_label = GetW(rev_node);
+      if (edge_label == seq[k_] || edge_label - kAlphabetSize == seq[k_]) {
+        assert(rev_node < size());
+        return rev_node;
+      }
+      --rev_node;
+    } while (rev_node != kNullID && !IsLastOrTip(rev_node));
+
+    return kNullID;
+  }
 
   /**
    * free multiplicity of all edges to reduce memory

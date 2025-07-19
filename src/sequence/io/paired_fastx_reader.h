@@ -21,6 +21,7 @@ class PairedFastxReader : public BaseSequenceReader {
  private:
   std::unique_ptr<FastxReader> readers_[2];
   bool trim_n_{true};
+  bool trim_qc_{true};
 };
 
 #endif  // MEGAHIT_PAIR_END_FASTX_READER_H

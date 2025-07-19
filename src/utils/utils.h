@@ -34,6 +34,12 @@
 #include <istream>
 #include <fstream>
 #include "pprintpp/pprintpp.hpp"
+#include <string>
+#include <iostream>
+#include <stdexcept>
+#include <algorithm>
+#include <cassert>
+#include <sstream>
 
 inline FILE *xfopen(const char *filename, const char *mode) {
   FILE *fp;
@@ -128,7 +134,7 @@ struct SimpleTimer {
 struct AutoMaxRssRecorder {
   struct timeval tv1 {}, tv2{};
   long long mem1 = 0, mem2 = 0;
-  long long maxmem = 0;
+
   AutoMaxRssRecorder() { 
     gettimeofday(&tv1, nullptr);
     std::ifstream statusFile("/proc/self/status");
@@ -143,21 +149,6 @@ struct AutoMaxRssRecorder {
   }
 
   ~AutoMaxRssRecorder() { watch(); }
-
-  void checkmem() {
-    std::ifstream statusFile("/proc/self/status");
-    std::string line;
-  
-    while (std::getline(statusFile, line)) {
-        if (line.find("VmRSS") == 0) {
-          mem2 = std::stoll(line.substr(6));
-          break;
-        }
-    }
-
-    maxmem = (mem2 - mem1) > maxmem ?  (mem2 - mem1) : maxmem;
-    xinfoc("\tmaxrss: {}\n", maxmem);
-  }
 
   void watch() {
 #define TURN_ON_MAX_RSS_LOG
@@ -186,10 +177,10 @@ struct AutoMaxRssRecorder {
         }
     }
 
-    maxmem = (mem2 - mem1) > maxmem ?  (mem2 - mem1) : maxmem;
+
     xinfo("Real: {.4}", real_time / 1000000.0);
-    xinfoc("\tuser: {.4}\tsys: {.4}\tmaxrss: {}\tmemused: {.4}\n", utime, stime,
-           usage.ru_maxrss, maxmem);
+    xinfoc("\tuser: {.4}\tsys: {.4}\tmaxrss: {}\n", utime, stime,
+           usage.ru_maxrss);
 #endif
   }
 };
@@ -209,6 +200,21 @@ static void ScanField(std::istream &in, const std::string &field, T &out) {
     xfatal("Invalid format. Expect field {s}, got {s}\n", field.c_str(),
            s.c_str());
   }
+}
+
+static size_t getCurrentRSS_kb() {
+  std::ifstream file("/proc/self/status");
+  std::string line;
+  while (std::getline(file, line)) {
+      if (line.find("VmRSS:") == 0) {
+          std::istringstream iss(line);
+          std::string key, value, unit;
+          size_t rss_kb;
+          iss >> key >> rss_kb >> unit;
+          return rss_kb;
+      }
+  }
+  return 0;
 }
 
 #endif  // MEGAHIT_UTILS_H

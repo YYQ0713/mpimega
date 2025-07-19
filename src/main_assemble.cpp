@@ -246,14 +246,14 @@ void ParseAsmOption(int argc, char **argv, AsmOptions &opt) {
   }
 };
 
-
 int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
   AutoMaxRssRecorder recorder;
   AsmOptions opt;
   ParseAsmOption(argc, argv, opt);
   SDBG dbg;
   SimpleTimer timer;
-
+  size_t vmrss_kb;
+  
   // graph loading
   timer.reset();
   timer.start();
@@ -312,6 +312,7 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
     complex_bubble_remover.SetCarefulThreshold(0.2).SetWriter(&bubble_writer);
   }
 
+  MPI_Barrier(MPI_COMM_WORLD); // Barrier before graph cleaning
   // graph cleaning
   for (int round = 1; round <= opt.cleaning_rounds; ++round) {
     xinfo("Graph cleaning round {}\n", round);
@@ -380,12 +381,6 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
     }
     if (!changed) break;
   }
-
-  //MPI_Bcast(&vtx_size, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
-  //if (mpienv.rank != 0) {
-  //  graph.vertices_resize(vtx_size);
-  //}
-  //graph.Mpi_Bcast_vertices();
 
   ContigStat stat = CalcAndPrintStat(graph);
   
@@ -461,6 +456,8 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
     xinfo("Time to output after local low depth unitigs removed: {}\n", timer.elapsed());
     auto stat_changed = CalcAndPrintStat(graph, false, true);
   }
+  vmrss_kb = getCurrentRSS_kb();
+  xinfo("End of asm currentRSS: {} KB\n", vmrss_kb);
 
   return 0;
 }

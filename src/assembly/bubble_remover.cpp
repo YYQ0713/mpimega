@@ -207,33 +207,33 @@ size_t BaseBubbleRemover::PopBubbles(UnitigGraph &graph, bool permanent_rm,
                                      uint32_t max_len,
                                      const checker_type &checker, MPIEnviroment &mpienv) {
   uint32_t num_removed = 0;
-  AtomicBitVector to_delete(graph.size());
+  //AtomicBitVector to_delete(graph.size());
   //int64_t num_edges_mean = graph.size() / mpienv.nprocs;
   //int64_t remain = graph.size() % mpienv.nprocs;         
   //int64_t start_index = mpienv.rank * num_edges_mean + (mpienv.rank < remain ? mpienv.rank : remain);
   //int64_t end_index = start_index + num_edges_mean + (mpienv.rank < remain ? 1 : 0);
 #pragma omp parallel for reduction(+ : num_removed)
-  for (UnitigGraph::size_type i = mpienv.rank; i < graph.size(); i += mpienv.nprocs) {
+  for (UnitigGraph::size_type i = 0; i < graph.size(); i++) {
     UnitigGraph::VertexAdapter adapter = graph.MakeVertexAdapter(i);
     if (adapter.IsStandalone()) {
       continue;
     }
     for (int strand = 0; strand < 2; ++strand, adapter.ReverseComplement()) {
-      num_removed += SearchAndPopBubble(graph, adapter, max_len, checker, to_delete);
-      //num_removed += SearchAndPopBubble(graph, adapter, max_len, checker);
+      //num_removed += SearchAndPopBubble(graph, adapter, max_len, checker, to_delete);
+      num_removed += SearchAndPopBubble(graph, adapter, max_len, checker);
     }
   }
 
-  MPI_Allreduce(MPI_IN_PLACE, &num_removed, 1, MPI_UINT32_T, MPI_SUM, MPI_COMM_WORLD);
-  MPI_Allreduce(MPI_IN_PLACE, to_delete.data_array_.data(), to_delete.data_array_.size(), MPI_UINT64_T, MPI_BOR, MPI_COMM_WORLD);
+//   MPI_Allreduce(MPI_IN_PLACE, &num_removed, 1, MPI_UINT32_T, MPI_SUM, MPI_COMM_WORLD);
+//   MPI_Allreduce(MPI_IN_PLACE, to_delete.data_array_.data(), to_delete.data_array_.size(), MPI_UINT64_T, MPI_BOR, MPI_COMM_WORLD);
 
-#pragma omp parallel for
-  for (UnitigGraph::size_type i = 0; i < graph.size(); ++i) {
-    if (to_delete.at(i)) {
-      auto adapter = graph.MakeVertexAdapter(i);
-      adapter.SetToDelete();
-    }
-  }
+// #pragma omp parallel for
+//   for (UnitigGraph::size_type i = 0; i < graph.size(); ++i) {
+//     if (to_delete.at(i)) {
+//       auto adapter = graph.MakeVertexAdapter(i);
+//       adapter.SetToDelete();
+//     }
+//   }
 
   graph.Refresh(!permanent_rm);
   return num_removed;

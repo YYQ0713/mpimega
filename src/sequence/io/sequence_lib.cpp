@@ -50,6 +50,7 @@ void SequenceLibCollection::Build(const std::string &lib_file,
 
     while (true) {
       const auto &seq_batch = async_reader.Next();
+      // const auto &seq_batch = async_reader.NextSync();
       if (seq_batch.seq_count() == 0) {
         break;
       }
