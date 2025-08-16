@@ -173,7 +173,7 @@ class UnitigGraph {
   MPIEnviroment mpienv_;
   //std::deque<UnitigGraphVertex> vertices_;
   std::vector<UnitigGraphVertex> vertices_;
-  std::vector<UnitigGraphVertex> loop_vertices_;
+  //std::vector<UnitigGraphVertex> loop_vertices_;
   //phmap::flat_hash_map<uint64_t, size_type> id_map_;
   spp::sparse_hash_map<uint64_t, size_type> id_map_;
   //spp::sparse_hash_map<uint64_t, uint64_t> strand_map_;

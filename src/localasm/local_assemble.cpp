@@ -320,11 +320,12 @@ void AssembleAndOutput(const HashMapper &mapper, const SeqPackage &read_pkg,
 
 void RunLocalAssembly(const LocalAsmOption &opt, MPIEnviroment &mpienv) {
   SimpleTimer timer;
+  size_t vmrss_kb;
   timer.reset();
   timer.start();
   HashMapper mapper;
   mapper.LoadAndBuild(opt.contig_file, opt.min_contig_len, opt.seed_kmer,
-                      opt.sparsity);
+                      opt.sparsity, mpienv);
   mapper.SetMappingThreshold(opt.min_mapping_len, opt.similarity);
   timer.stop();
   xinfo("Hash mapper construction time elapsed: {}\n", timer.elapsed());
@@ -359,4 +360,7 @@ void RunLocalAssembly(const LocalAsmOption &opt, MPIEnviroment &mpienv) {
                     max_local_range, opt, mpienv);
   timer.stop();
   xinfo("Local assembly time elapsed: {}\n", timer.elapsed());
+
+  vmrss_kb = getCurrentRSS_kb();
+  xinfo("End of local asm currentRSS: {} KB\n", vmrss_kb);
 }

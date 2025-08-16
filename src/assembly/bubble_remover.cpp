@@ -58,7 +58,7 @@ double GetSimilarity(const std::string &a, const std::string &b,
 int BaseBubbleRemover::SearchAndPopBubble(UnitigGraph &graph,
                                           UnitigGraph::VertexAdapter &adapter,
                                           uint32_t max_len,
-                                          const checker_type &checker) {
+                                          const checker_type &checker, int rank) {
   UnitigGraph::VertexAdapter right;
   UnitigGraph::VertexAdapter middle[4];
   UnitigGraph::VertexAdapter possible_right[4];
@@ -112,19 +112,25 @@ int BaseBubbleRemover::SearchAndPopBubble(UnitigGraph &graph,
     if (bubble_file_ && middle[j].GetAvgDepth() >=
                             middle[0].GetAvgDepth() * careful_threshold_) {
       std::string label = graph.VertexToDNAString(middle[j]);
+      if (rank == 0) {
       bubble_file_->WriteContig(label, graph.k(), 0, 0,
                                 middle[j].GetAvgDepth());
+      }
       careful_merged = true;
     }
   }
-  if (careful_merged) {
-    std::string left_label = graph.VertexToDNAString(adapter);
-    std::string right_label = graph.VertexToDNAString(right);
-    bubble_file_->WriteContig(left_label, graph.k(), 0, 0,
-                              adapter.GetAvgDepth());
-    bubble_file_->WriteContig(right_label, graph.k(), 0, 0,
-                              right.GetAvgDepth());
+
+  if (rank == 0) {
+    if (careful_merged) {
+      std::string left_label = graph.VertexToDNAString(adapter);
+      std::string right_label = graph.VertexToDNAString(right);
+      bubble_file_->WriteContig(left_label, graph.k(), 0, 0,
+                                adapter.GetAvgDepth());
+      bubble_file_->WriteContig(right_label, graph.k(), 0, 0,
+                                right.GetAvgDepth());
+    }
   }
+  
   return num_removed;
 }
 
@@ -220,7 +226,7 @@ size_t BaseBubbleRemover::PopBubbles(UnitigGraph &graph, bool permanent_rm,
     }
     for (int strand = 0; strand < 2; ++strand, adapter.ReverseComplement()) {
       //num_removed += SearchAndPopBubble(graph, adapter, max_len, checker, to_delete);
-      num_removed += SearchAndPopBubble(graph, adapter, max_len, checker);
+      num_removed += SearchAndPopBubble(graph, adapter, max_len, checker, mpienv.rank);
     }
   }
 

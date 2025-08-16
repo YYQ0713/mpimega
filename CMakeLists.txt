@@ -42,9 +42,10 @@ FILE(GLOB_RECURSE LCASM_SOURCE "src/localasm/*.cpp")
 FILE(GLOB_RECURSE IDBA_SOURCE "src/idba/*.cpp")
 
 LIST(APPEND OTHER_SOURCE
+		src/main.cpp
 		src/main_assemble.cpp
-        src/main.cpp
         src/main_buildlib.cpp
+		src/main_iterate.cpp
         src/main_sdbg_build.cpp
 		src/main_local_assemble.cpp
         src/utils/options_description.cpp

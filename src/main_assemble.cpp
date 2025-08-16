@@ -382,7 +382,7 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
     if (!changed) break;
   }
 
-  ContigStat stat = CalcAndPrintStat(graph);
+  //ContigStat stat = CalcAndPrintStat(graph);
   
   // output contigs
   //ContigWriter contig_writer(opt.contig_file());

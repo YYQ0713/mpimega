@@ -28,7 +28,7 @@
 
 int main_assemble(int argc, char **argv, MPIEnviroment &mpienv);
 int main_local(int argc, char **argv, MPIEnviroment &mpienv);
-int main_iterate(int argc, char **argv);
+int main_iterate(int argc, char **argv, MPIEnviroment &mpienv);
 int main_build_lib(int argc, char **argv, MPIEnviroment &mpienv);
 
 int main_kmer_count(int argc, char **argv, MPIEnviroment &mpienv);
@@ -946,6 +946,24 @@ void local_assemble(Options& opt, int cur_k, int kmer_to) {
     main_local(la_args.size(), const_cast<char**>(la_args.data()), opt.mpienv_);
 }
 
+void iterate(Options& opt, int cur_k, int k_step) {
+    int next_k = cur_k + k_step;
+    std::vector<std::string> args_it = {"iterate" , "-c", contig_prefix(opt.contig_dir(), cur_k) + ".contigs.fa"
+                                                , "-b", contig_prefix(opt.contig_dir(), cur_k) + ".bubble_seq.fa"
+                                                , "-t", std::to_string(opt.num_cpu_threads)
+                                                , "-k", std::to_string(cur_k)
+                                                , "-s", std::to_string(k_step)
+                                                , "-o", graph_prefix(opt.temp_dir, next_k)
+                                                , "-r", opt.read_lib_path() + ".bin"};
+    
+    std::vector<const char*> it_args;
+    for (const auto& arg : args_it) {
+        it_args.push_back(arg.c_str());
+    }
+
+    main_iterate(it_args.size(), const_cast<char**>(it_args.data()), opt.mpienv_);
+}
+
 int main(int argc, char **argv) {
     Options opt;
     opt.mpienv_.init(argc, argv);
@@ -983,7 +1001,7 @@ int main(int argc, char **argv) {
             local_assemble(opt, cur_k, next_k);
         }
         
-
+        iterate(opt, cur_k, k_step);
     //}
     
     opt.mpienv_.finalize();

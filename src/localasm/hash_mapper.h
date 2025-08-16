@@ -10,6 +10,7 @@
 #include "parallel_hashmap/phmap.h"
 #include "sequence/kmer_plus.h"
 #include "sequence/sequence_package.h"
+#include "mpienv/mpienv.hpp"
 
 struct MappingRecord {
   uint32_t contig_id;
@@ -46,7 +47,7 @@ class HashMapper {
   using TKmer = Kmer<2, uint32_t>;
   using TMapper = phmap::parallel_flat_hash_map<TKmer, uint64_t, KmerHash>;
   void LoadAndBuild(const std::string &contig_file, int32_t min_len,
-                    int32_t seed_kmer_size, int32_t sparsity);
+                    int32_t seed_kmer_size, int32_t sparsity, MPIEnviroment &mpienv);
 
   void SetMappingThreshold(int32_t mapping_len, double similarity) {
     min_mapped_len_ = mapping_len;

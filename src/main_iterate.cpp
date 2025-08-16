@@ -43,7 +43,7 @@ using std::vector;
 
 namespace {
 
-struct LocalAsmOption {
+struct IterOption {
   string contig_file;
   string bubble_file;
   string read_file;
@@ -53,7 +53,68 @@ struct LocalAsmOption {
   string output_prefix;
 } opt;
 
-static void ParseIterOptions(int argc, char *argv[]) {
+// static void ParseIterOptions(int argc, char *argv[]) {
+//   OptionsDescription desc;
+
+//   desc.AddOption("contig_file", "c", opt.contig_file,
+//                  "(*) contigs file, fasta/fastq format, output by assembler");
+//   desc.AddOption("bubble_file", "b", opt.bubble_file,
+//                  "(*) bubble file, fasta/fastq format, output by assembler");
+//   desc.AddOption("read_file", "r", opt.read_file,
+//                  "(*) reads to be aligned. \"-\" for stdin. Can be gzip'ed.");
+//   desc.AddOption("num_cpu_threads", "t", opt.num_cpu_threads,
+//                  "number of cpu threads, at least 2. 0 for auto detect.");
+//   desc.AddOption("kmer_k", "k", opt.kmer_k, "(*) current kmer size.");
+//   desc.AddOption("step", "s", opt.step,
+//                  "(*) step for iteration (<= 28). i.e. this iteration is from "
+//                  "kmer_k to (kmer_k + step)");
+//   desc.AddOption("output_prefix", "o", opt.output_prefix,
+//                  "(*) output_prefix.edges.0 will be created.");
+
+//   try {
+//     desc.Parse(argc, argv);
+
+//     if (opt.step + opt.kmer_k >=
+//         static_cast<int>(
+//             std::max(Kmer<4>::max_size(), GenericKmer::max_size()))) {
+//       std::ostringstream os;
+//       os << "kmer_k + step must less than "
+//          << std::max(Kmer<4>::max_size(), GenericKmer::max_size());
+//       throw std::logic_error(os.str());
+//     } else if (opt.contig_file == "") {
+//       throw std::logic_error("No contig file!");
+//     } else if (opt.bubble_file == "") {
+//       throw std::logic_error("No bubble file!");
+//     } else if (opt.read_file == "") {
+//       throw std::logic_error("No reads file!");
+//     } else if (opt.kmer_k <= 0) {
+//       throw std::logic_error("Invalid kmer size!");
+//     } else if (opt.step <= 0 || opt.step > 28 || opt.step % 2 == 1) {
+//       throw std::logic_error("Invalid step size!");
+//     } else if (opt.output_prefix == "") {
+//       throw std::logic_error("No output prefix!");
+//     }
+//     if (opt.num_cpu_threads == 0) {
+//       opt.num_cpu_threads = omp_get_max_threads();
+//     }
+//     if (opt.num_cpu_threads > 1) {
+//       omp_set_num_threads(opt.num_cpu_threads - 1);
+//     } else {
+//       omp_set_num_threads(1);
+//     }
+//   } catch (std::exception &e) {
+//     std::cerr << e.what() << std::endl;
+//     std::cerr << "Usage: " << argv[0] << " [opt]" << std::endl;
+//     std::cerr << "opt with (*) are must" << std::endl;
+//     std::cerr << "opt:" << std::endl;
+//     std::cerr << desc << std::endl;
+//     exit(1);
+//   }
+// }
+
+}  // namespace
+
+void ParseItOptions(int argc, char **argv, IterOption &opt) {
   OptionsDescription desc;
 
   desc.AddOption("contig_file", "c", opt.contig_file,
@@ -71,9 +132,46 @@ static void ParseIterOptions(int argc, char *argv[]) {
   desc.AddOption("output_prefix", "o", opt.output_prefix,
                  "(*) output_prefix.edges.0 will be created.");
 
-  try {
-    desc.Parse(argc, argv);
+  for (int i = 1; i < argc; ++i) {
+    std::string option = argv[i];
+    if (option == "-c" || option == "--contig_file") {
+      if (i + 1 <= argc) {
+        opt.contig_file = argv[++i];
+      }
+    }
+    else if (option == "-b" || option == "--bubble_file") {
+      if (i + 1 <= argc) {
+        opt.bubble_file = argv[++i];
+      }
+    }
+    else if (option == "-r" || option == "--read_file") {
+      if (i + 1 <= argc) {
+        opt.read_file = argv[++i];
+      }
+    }
+    else if (option == "-k" || option == "--kmer_k") {
+      if (i + 1 <= argc) {
+        opt.kmer_k = std::stoi(argv[++i]);
+      }
+    }
+    else if (option == "-s" || option == "--step") {
+      if (i + 1 <= argc) {
+        opt.step = std::stoi(argv[++i]);
+      }
+    }
+    else if (option == "-t" || option == "--num_cpu_threads") {
+      if (i + 1 <= argc) {
+        opt.num_cpu_threads = std::stoi(argv[++i]);
+      }
+    }
+    else if (option == "-o" || option == "--output_prefix") {
+      if (i + 1 <= argc) {
+        opt.output_prefix = argv[++i];
+      }
+    }
+  }
 
+  try {
     if (opt.step + opt.kmer_k >=
         static_cast<int>(
             std::max(Kmer<4>::max_size(), GenericKmer::max_size()))) {
@@ -110,13 +208,12 @@ static void ParseIterOptions(int argc, char *argv[]) {
     std::cerr << desc << std::endl;
     exit(1);
   }
-}
-
-}  // namespace
+};
 
 template <class KmerType, class IndexType>
-static bool ReadReadsAndProcessKernel(const LocalAsmOption &opt,
-                                      const IndexType &index) {
+static bool ReadReadsAndProcessKernel(const IterOption &opt,
+                                      const IndexType &index,
+                                      MPIEnviroment &mpienv) {
   if (KmerType::max_size() < static_cast<unsigned>(opt.kmer_k + opt.step + 1)) {
     return false;
   }
@@ -124,7 +221,8 @@ static bool ReadReadsAndProcessKernel(const LocalAsmOption &opt,
   BinaryReader binary_reader(opt.read_file);
   AsyncSequenceReader reader(&binary_reader);
   KmerCollector<KmerType> collector(opt.kmer_k + opt.step + 1,
-                                    opt.output_prefix);
+                                    opt.output_prefix,
+                                    mpienv);
   int64_t num_aligned_reads = 0;
   int64_t num_total_reads = 0;
 
@@ -133,7 +231,7 @@ static bool ReadReadsAndProcessKernel(const LocalAsmOption &opt,
     if (read_pkg.seq_count() == 0) {
       break;
     }
-    num_aligned_reads += index.FindNextKmersFromReads(read_pkg, &collector);
+    num_aligned_reads += index.FindNextKmersFromReads(read_pkg, &collector, mpienv.rank, mpienv.nprocs);
     num_total_reads += read_pkg.seq_count();
     xinfo("Processed: {}, aligned: {}. Iterative edges: {}\n", num_total_reads,
           num_aligned_reads, collector.collection().size());
@@ -145,24 +243,26 @@ static bool ReadReadsAndProcessKernel(const LocalAsmOption &opt,
 }
 
 template <class IndexType>
-static void ReadReadsAndProcess(const LocalAsmOption &opt,
-                                const IndexType &index) {
-  if (ReadReadsAndProcessKernel<Kmer<1, uint64_t>>(opt, index)) return;
-  if (ReadReadsAndProcessKernel<Kmer<3, uint32_t>>(opt, index)) return;
-  if (ReadReadsAndProcessKernel<Kmer<2, uint64_t>>(opt, index)) return;
-  if (ReadReadsAndProcessKernel<Kmer<5, uint32_t>>(opt, index)) return;
-  if (ReadReadsAndProcessKernel<Kmer<3, uint64_t>>(opt, index)) return;
-  if (ReadReadsAndProcessKernel<Kmer<7, uint32_t>>(opt, index)) return;
-  if (ReadReadsAndProcessKernel<Kmer<4, uint64_t>>(opt, index)) return;
-  if (ReadReadsAndProcessKernel<Kmer<kUint32PerKmerMaxK, uint32_t>>(opt, index))
+static void ReadReadsAndProcess(const IterOption &opt,
+                                const IndexType &index,
+                                MPIEnviroment &mpienv) {
+  if (ReadReadsAndProcessKernel<Kmer<1, uint64_t>>(opt, index, mpienv)) return;
+  if (ReadReadsAndProcessKernel<Kmer<3, uint32_t>>(opt, index, mpienv)) return;
+  if (ReadReadsAndProcessKernel<Kmer<2, uint64_t>>(opt, index, mpienv)) return;
+  if (ReadReadsAndProcessKernel<Kmer<5, uint32_t>>(opt, index, mpienv)) return;
+  if (ReadReadsAndProcessKernel<Kmer<3, uint64_t>>(opt, index, mpienv)) return;
+  if (ReadReadsAndProcessKernel<Kmer<7, uint32_t>>(opt, index, mpienv)) return;
+  if (ReadReadsAndProcessKernel<Kmer<4, uint64_t>>(opt, index, mpienv)) return;
+  if (ReadReadsAndProcessKernel<Kmer<kUint32PerKmerMaxK, uint32_t>>(opt, index, mpienv))
     return;
   xfatal("k is too large!\n");
 }
 
 template <class IndexType>
-static void ReadContigsAndBuildIndex(const LocalAsmOption &opt,
+static void ReadContigsAndBuildIndex(const IterOption &opt,
                                      const std::string &file_name,
-                                     IndexType *index) {
+                                     IndexType *index,
+                                     MPIEnviroment &mpienv) {
   AsyncContigReader reader(file_name);
   while (true) {
     auto &pkg = reader.Next();
@@ -179,26 +279,31 @@ static void ReadContigsAndBuildIndex(const LocalAsmOption &opt,
 
 struct BaseRunner {
   virtual ~BaseRunner() = default;
-  virtual void Run(const LocalAsmOption &opt) = 0;
+  virtual void Run(const IterOption &opt, MPIEnviroment &mpienv) = 0;
   virtual uint32_t max_k() const = 0;
 };
 
 template <class KmerType>
 struct Runner : public BaseRunner {
   ~Runner() override = default;
-  void Run(const LocalAsmOption &opt) override {
+  void Run(const IterOption &opt, MPIEnviroment &mpienv) override {
     xinfo("Selected kmer type size for k: {}\n", sizeof(KmerType));
+    size_t vmrss_kb = getCurrentRSS_kb();
+    xinfo("start of iter currentRSS: {} KB\n", vmrss_kb);
     ContigFlankIndex<KmerType> index(opt.kmer_k, opt.step);
-    ReadContigsAndBuildIndex(opt, opt.contig_file, &index);
-    ReadContigsAndBuildIndex(opt, opt.bubble_file, &index);
-    ReadReadsAndProcess(opt, index);
+    ReadContigsAndBuildIndex(opt, opt.contig_file, &index, mpienv);
+    ReadContigsAndBuildIndex(opt, opt.bubble_file, &index, mpienv);
+    ReadReadsAndProcess(opt, index, mpienv);
+    vmrss_kb = getCurrentRSS_kb();
+    xinfo("End of iter currentRSS: {} KB\n", vmrss_kb);
   }
   uint32_t max_k() const override { return KmerType::max_size(); }
 };
 
-int main_iterate(int argc, char **argv) {
+int main_iterate(int argc, char **argv, MPIEnviroment &mpienv) {
   AutoMaxRssRecorder recorder;
-  ParseIterOptions(argc, argv);
+  IterOption opt;
+  ParseItOptions(argc, argv, opt);
 
   std::list<std::unique_ptr<BaseRunner>> runners;
   runners.emplace_back(new Runner<Kmer<1, uint64_t>>());
@@ -212,7 +317,7 @@ int main_iterate(int argc, char **argv) {
 
   for (auto &runner : runners) {
     if (runner->max_k() >= static_cast<uint32_t>(opt.kmer_k + 1)) {
-      runner->Run(opt);
+      runner->Run(opt, mpienv);
       return 0;
     }
   }

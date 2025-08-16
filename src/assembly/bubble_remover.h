@@ -35,7 +35,7 @@ class BaseBubbleRemover {
                     const checker_type &checker, MPIEnviroment &mpienv);
   int SearchAndPopBubble(UnitigGraph &graph,
                          UnitigGraph::VertexAdapter &adapter, uint32_t max_len,
-                         const checker_type &checker);
+                         const checker_type &checker, int rank);
   int SearchAndPopBubble(UnitigGraph &graph,
                          UnitigGraph::VertexAdapter &adapter, uint32_t max_len,
                          const checker_type &checker, AtomicBitVector &to_delete);

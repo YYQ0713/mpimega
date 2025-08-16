@@ -11,6 +11,7 @@
 #include "sequence/kmer_plus.h"
 #include "sequence/sequence_package.h"
 #include "utils/mutex.h"
+#include "ankerl/unordered_dense.h"
 
 template <class KmerType>
 class ContigFlankIndex {
@@ -21,7 +22,8 @@ class ContigFlankIndex {
     float mul;
   } __attribute__((packed));
   using Flank = KmerPlus<KmerType, FlankInfo>;
-  using HashSet = phmap::flat_hash_set<Flank, KmerHash>;
+  // using HashSet = phmap::flat_hash_set<Flank, KmerHash>;
+  using HashSet = ankerl::unordered_dense::segmented_set<Flank, KmerHash>;
 
  public:
   ContigFlankIndex(unsigned k, unsigned step) : k_(k), step_(step) {}
@@ -81,10 +83,11 @@ class ContigFlankIndex {
 
   template <class CollectorType>
   size_t FindNextKmersFromReads(const SeqPackage &seq_pkg,
-                                CollectorType *out) const {
+                                CollectorType *out, int rank, int nprocs) const {
     std::vector<bool> kmer_exist;
     std::vector<float> kmer_mul;
     size_t num_aligned_reads = 0;
+    KmerHash hasher;
 
 #pragma omp parallel for reduction(+ : num_aligned_reads) private(kmer_exist, kmer_mul)
     for (unsigned seq_id = 0; seq_id < seq_pkg.seq_count(); ++seq_id) {
@@ -173,7 +176,7 @@ class ContigFlankIndex {
         kmer_mul[j] += kmer_mul[j - 1];
       }
 
-      typename CollectorType::kmer_type new_kmer, new_rkmer;
+      typename CollectorType::kmer_type new_kmer, new_rkmer, final_kmer;
 
       for (unsigned accumulated_len = 0, j = 0, end_pos = 0; j + k_ < length;
            ++j) {
@@ -203,9 +206,13 @@ class ContigFlankIndex {
               (kmer_mul[j] - (j >= step_ + 1 ? kmer_mul[j - (step_ + 1)] : 0)) /
               (step_ + 1);
           assert(mul <= kMaxMul + 1);
-          out->Insert(new_kmer < new_rkmer ? new_kmer : new_rkmer,
-                      static_cast<mul_t>(
-                          std::min(kMaxMul, static_cast<int>(mul + 0.5))));
+
+          final_kmer = new_kmer < new_rkmer ? new_kmer : new_rkmer;
+          if (hasher(final_kmer) % nprocs == rank) {
+            out->Insert(final_kmer,
+                        static_cast<mul_t>(
+                            std::min(kMaxMul, static_cast<int>(mul + 0.5))));
+          }
           success = true;
         }
       }

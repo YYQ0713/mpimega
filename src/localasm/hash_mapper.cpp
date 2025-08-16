@@ -54,7 +54,7 @@ inline int Mismatch(uint32_t x, uint32_t y) {
 }  // namespace
 
 void HashMapper::LoadAndBuild(const std::string &contig_file, int32_t min_len,
-                              int32_t seed_kmer_size, int32_t sparsity) {
+                              int32_t seed_kmer_size, int32_t sparsity, MPIEnviroment &mpienv) {
   seed_kmer_size_ = seed_kmer_size;
   ContigReader reader(contig_file);
   reader.SetMinLen(min_len)->SetDiscardFlag(contig_flag::kLoop);
@@ -64,6 +64,7 @@ void HashMapper::LoadAndBuild(const std::string &contig_file, int32_t min_len,
   refseq_.ReserveBases(sizes.second);
   bool contig_reverse = false;
   reader.ReadAll(&refseq_, contig_reverse);
+  // reader.ReadDistbt(&refseq_, sizes.first, mpienv, contig_reverse);
 
   size_t sz = refseq_.seq_count();
   size_t n_kmers = 0;

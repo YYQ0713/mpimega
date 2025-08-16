@@ -21,8 +21,8 @@ class KmerCollector {
       phmap::container_internal::hash_default_eq<kmer_plus>,
       phmap::container_internal::Allocator<kmer_plus>, 12, SpinLock>;
 
-  KmerCollector(unsigned k, const std::string &out_prefix)
-      : k_(k), output_prefix_(out_prefix) {
+  KmerCollector(unsigned k, const std::string &out_prefix, MPIEnviroment &mpienv)
+      : k_(k), output_prefix_(out_prefix), mpienv_(mpienv) {
     last_shift_ = k_ % 16;
     last_shift_ = (last_shift_ == 0 ? 0 : 16 - last_shift_) * 2;
     words_per_kmer_ = DivCeiling(k_ * 2 + kBitsPerMul, 32);
@@ -31,7 +31,7 @@ class KmerCollector {
     writer_.SetFilePrefix(out_prefix);
     writer_.SetUnordered();
     writer_.SetKmerSize(k_ - 1);
-    writer_.InitFiles();
+    writer_.InitFiles(mpienv_);
   }
 
   void Insert(const KmerType &kmer, mul_t mul) {
@@ -76,6 +76,7 @@ class KmerCollector {
   unsigned last_shift_;
   unsigned words_per_kmer_;
   std::vector<uint32_t> buffer_;
+  MPIEnviroment mpienv_;
 };
 
 #endif  // MEGAHIT_SPANNING_KMER_COLLECTOR_H

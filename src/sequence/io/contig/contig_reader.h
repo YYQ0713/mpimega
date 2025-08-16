@@ -43,6 +43,76 @@ class ContigReader : public FastxReader {
                                        reverse);
   }
 
+  int64_t ReadDistbt(SeqPackage *pkg, uint64_t ctg_sz, MPIEnviroment &mpienv, bool reverse) {
+    // 每个进程负责的区间计算
+    uint64_t base = ctg_sz / mpienv.nprocs;
+    uint64_t rem  = ctg_sz % mpienv.nprocs;
+    uint64_t start_ctg = mpienv.rank < rem ? (mpienv.rank * (base + 1)) : (rem * (base + 1) + (mpienv.rank - rem) * base);
+    uint64_t end_ctg   = start_ctg + (mpienv.rank < rem ? (base + 1) : base);
+    
+    int64_t max_num = 1LL << 60;
+    int64_t max_num_bases = 1LL << 60;
+
+    // 先跳过自己的起始 contig 之前的部分
+    uint64_t cur_ctg_idx = 0;
+    while (cur_ctg_idx < start_ctg) {
+        auto record = ReadNext();
+        if (!record) return 0; // 文件提前结束
+        ++cur_ctg_idx;
+    }
+
+    // 原本的逻辑保留，只是加上区间结束判断
+    bool extend_loop = k_from_ < k_to_ && !(discard_flag_ & contig_flag::kLoop);
+    int64_t num_bases = 0;
+    int64_t ri;
+
+    for (ri = 0; cur_ctg_idx < end_ctg; ++ri, ++cur_ctg_idx) {
+      auto record = ReadNext();
+      if (!record) {
+          return ri;
+      }
+
+      if (record->seq.l < min_len_) {
+          --ri;
+          continue;
+      }
+
+      unsigned flag = record->comment.s[5] - '0';
+      if (discard_flag_ & flag) {
+          --ri;
+          continue;
+      }
+
+      if (extend_loop && (flag & contig_flag::kLoop)) {
+          if (record->seq.l < k_to_ + 1U) {
+              continue;
+          }
+          std::string ss(record->seq.s);
+          for (unsigned i = k_from_; i < k_to_; ++i) {
+              ss.push_back(ss[i]);
+          }
+          if (reverse) {
+              pkg->AppendReversedStringSequence(ss.c_str(), ss.length());
+          } else {
+              pkg->AppendStringSequence(ss.c_str(), ss.length());
+          }
+      } else {
+          if (reverse) {
+              pkg->AppendReversedStringSequence(record->seq.s, record->seq.l);
+          } else {
+              pkg->AppendStringSequence(record->seq.s, record->seq.l);
+          }
+      }
+
+      num_bases += record->seq.l;
+      if (num_bases >= max_num_bases) {
+          return ri + 1;
+      }
+    }
+
+    return ri;
+  }
+
   template <typename TMul>
   int64_t ReadAllWithMultiplicity(SeqPackage *pkg, std::vector<TMul> *mul,
                                   bool reverse) {

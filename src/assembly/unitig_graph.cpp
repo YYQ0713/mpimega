@@ -13,9 +13,7 @@
 UnitigGraph::UnitigGraph(SDBG *sdbg, MPIEnviroment &mpienv)
     : sdbg_(sdbg), mpienv_(mpienv), adapter_impl_(this), sudo_adapter_impl_(this) {
   id_map_.clear();
-  //strand_map_.clear();
   vertices_.clear();
-  loop_vertices_.clear();
   SpinLock path_lock;
   AtomicBitVector locks(sdbg_->size());
   size_t count_palindrome = 0;
@@ -95,6 +93,7 @@ UnitigGraph::UnitigGraph(SDBG *sdbg, MPIEnviroment &mpienv)
 
   MPI_Allreduce(MPI_IN_PLACE, locks.data_array_.data(), locks.data_array_.size(), MPI_UNSIGNED_LONG, MPI_BOR, MPI_COMM_WORLD);
 
+  if (mpienv.rank == 0) {
   // assemble looped paths
   std::mutex loop_lock;
   size_t count_loop = 0;
@@ -122,7 +121,7 @@ UnitigGraph::UnitigGraph(SDBG *sdbg, MPIEnviroment &mpienv)
         if (!rc_marked) {
           uint64_t start = sdbg_->NextSimplePathEdge(edge_idx);
           uint64_t end = edge_idx;
-          loop_vertices_.emplace_back(start, end, sdbg_->EdgeReverseComplement(end),
+          vertices_.emplace_back(start, end, sdbg_->EdgeReverseComplement(end),
                                  sdbg_->EdgeReverseComplement(start), depth,
                                  length, true);
           count_loop += 1;
@@ -130,18 +129,20 @@ UnitigGraph::UnitigGraph(SDBG *sdbg, MPIEnviroment &mpienv)
       }
     }
   }
-  xinfo("Graph size of loops: {}, count_loop: {}\n", loop_vertices_.size(), count_loop);
+  xinfo("Graph size of loops: {}, count_loop: {}\n", vertices_.size(), count_loop);
+  } // if (mpienv.rank == 0)
+
   sdbg_->FreeMultiplicity();
   MPI_Barrier(MPI_COMM_WORLD);
   size_t vmrss_kb = getCurrentRSS_kb();
   xinfo("Build uni graph befor gather and freeMulti currentRSS: {} KB\n", vmrss_kb);
   UniGather();
 
-  vertices_.reserve(vertices_.size() + loop_vertices_.size());
-  // 移动拼接，避免拷贝
-  vertices_.insert(vertices_.end(), std::make_move_iterator(loop_vertices_.begin()), std::make_move_iterator(loop_vertices_.end()));
-  // swap 释放 v2 的容量（缩容技巧）
-  std::vector<UnitigGraphVertex>().swap(loop_vertices_);  // v2 清空且 capacity = 0
+  // vertices_.reserve(vertices_.size() + loop_vertices_.size());
+  // // 移动拼接，避免拷贝
+  // vertices_.insert(vertices_.end(), std::make_move_iterator(loop_vertices_.begin()), std::make_move_iterator(loop_vertices_.end()));
+  // // swap 释放 v2 的容量（缩容技巧）
+  // std::vector<UnitigGraphVertex>().swap(loop_vertices_);  // v2 清空且 capacity = 0
 
   xinfo("Graph size without loops: {}, palindrome: {}\n", vertices_.size(), count_palindrome);
 
