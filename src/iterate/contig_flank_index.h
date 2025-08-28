@@ -12,6 +12,9 @@
 #include "sequence/sequence_package.h"
 #include "utils/mutex.h"
 #include "ankerl/unordered_dense.h"
+#include "sparsepp/spp.h"
+#include "libbloom/bloom.h"
+#include "sequence/io/edge/edge_writer.h"
 
 template <class KmerType>
 class ContigFlankIndex {
@@ -22,8 +25,8 @@ class ContigFlankIndex {
     float mul;
   } __attribute__((packed));
   using Flank = KmerPlus<KmerType, FlankInfo>;
-  // using HashSet = phmap::flat_hash_set<Flank, KmerHash>;
-  using HashSet = ankerl::unordered_dense::segmented_set<Flank, KmerHash>;
+  using HashSet = phmap::flat_hash_set<Flank, KmerHash>;
+  // using HashSet = spp::sparse_hash_set<Flank, KmerHash>;
 
  public:
   ContigFlankIndex(unsigned k, unsigned step) : k_(k), step_(step) {}
@@ -81,15 +84,18 @@ class ContigFlankIndex {
     }
   }
 
-  template <class CollectorType>
+  template <class CollectorType, class WriterType>
   size_t FindNextKmersFromReads(const SeqPackage &seq_pkg,
-                                CollectorType *out, int rank, int nprocs) const {
+                                CollectorType *out, int rank, int nprocs, Bloom *blf, WriterType *mpiwiriter, int64_t *num_edges) const {
     std::vector<bool> kmer_exist;
     std::vector<float> kmer_mul;
     size_t num_aligned_reads = 0;
-    KmerHash hasher;
+    size_t num_iter_edges = 0;
 
-#pragma omp parallel for reduction(+ : num_aligned_reads) private(kmer_exist, kmer_mul)
+    KmerHash hasher;
+    xinfo("iter test0\n");
+
+#pragma omp parallel for reduction(+ : num_aligned_reads, num_iter_edges) private(kmer_exist, kmer_mul)
     for (unsigned seq_id = 0; seq_id < seq_pkg.seq_count(); ++seq_id) {
       auto seq_view = seq_pkg.GetSeqView(seq_id);
       size_t length = seq_view.length();
@@ -209,15 +215,26 @@ class ContigFlankIndex {
 
           final_kmer = new_kmer < new_rkmer ? new_kmer : new_rkmer;
           if (hasher(final_kmer) % nprocs == rank) {
-            out->Insert(final_kmer,
-                        static_cast<mul_t>(
-                            std::min(kMaxMul, static_cast<int>(mul + 0.5))));
+            // out->Insert(final_kmer,
+            //             static_cast<mul_t>(
+            //                 std::min(kMaxMul, static_cast<int>(mul + 0.5))));
+
+            if (!blf->bloom_check_add(final_kmer)) {
+              mpiwiriter->WriteToBuf(final_kmer, static_cast<mul_t>(std::min(kMaxMul, static_cast<int>(mul + 0.5))));
+              num_iter_edges++;
+            }
           }
           success = true;
         }
       }
       num_aligned_reads += success;
+
+      // 仅主线程检查并刷新 buffer
+      if (omp_get_thread_num() == 0 && mpiwiriter->check_buf()) {
+        mpiwiriter->MPIFileWrite();
+      }
     }
+    *num_edges += num_iter_edges;
     return num_aligned_reads;
   }
 

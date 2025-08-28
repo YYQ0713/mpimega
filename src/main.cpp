@@ -1002,6 +1002,7 @@ int main(int argc, char **argv) {
         }
         
         iterate(opt, cur_k, k_step);
+        MPI_Barrier(MPI_COMM_WORLD); // Barrier
     //}
     
     opt.mpienv_.finalize();

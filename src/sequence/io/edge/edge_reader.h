@@ -93,13 +93,31 @@ class EdgeReader : public BaseSequenceReader {
     unsigned t = metadata_.num_files / mpienv_.nprocs;
     unsigned files_rem = metadata_.num_files % mpienv_.nprocs;
     assert(files_rem == 0);
-    for (unsigned i = 0; i < mpienv_.nprocs; i++) {
-      for (unsigned j = 0; j < t; j++) {
-        in_streams_.emplace_back(
-            new std::ifstream(file_prefix_ + ".rank." + std::to_string(i) + ".edges." + std::to_string(j),
-                              std::ifstream::binary | std::ifstream::in));
+
+    if (metadata_.is_sorted) {
+      for (unsigned i = 0; i < mpienv_.nprocs; i++) {
+        for (unsigned j = 0; j < t; j++) {
+          in_streams_.emplace_back(
+              new std::ifstream(file_prefix_ + ".rank." + std::to_string(i) + ".edges." + std::to_string(j),
+                                std::ifstream::binary | std::ifstream::in));
+        }
+      }
+    } else {
+      for (unsigned i = 0; i < metadata_.num_files; ++i) {
+      in_streams_.emplace_back(
+          new std::ifstream(file_prefix_ + ".rank." + std::to_string(i) + ".edges.0",
+                            std::ifstream::binary | std::ifstream::in));
       }
     }
+    
+
+    // for (unsigned i = 0; i < mpienv_.nprocs; i++) {
+    //   for (unsigned j = 0; j < t; j++) {
+    //     in_streams_.emplace_back(
+    //         new std::ifstream(file_prefix_ + ".rank." + std::to_string(i) + ".edges." + std::to_string(j),
+    //                           std::ifstream::binary | std::ifstream::in));
+    //   }
+    // }
     
 
     cur_cnt_ = 0;

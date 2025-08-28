@@ -28,14 +28,15 @@ class KmerCollector {
     words_per_kmer_ = DivCeiling(k_ * 2 + kBitsPerMul, 32);
     buffer_.resize(words_per_kmer_);
 
-    writer_.SetFilePrefix(out_prefix);
-    writer_.SetUnordered();
-    writer_.SetKmerSize(k_ - 1);
-    writer_.InitFiles(mpienv_);
+    // writer_.SetFilePrefix(out_prefix);
+    // writer_.SetUnordered();
+    // writer_.SetKmerSize(k_ - 1);
+    // writer_.InitFiles(mpienv_);
   }
 
   void Insert(const KmerType &kmer, mul_t mul) {
     collection_.insert({kmer, mul});
+    //collection_.emplace(kmer, mul);
   }
 
   const hash_set &collection() const { return collection_; }
@@ -65,14 +66,14 @@ class KmerCollector {
     *ptr = (w << last_shift_);
     assert((buffer_.back() & kMaxMul) == 0);
     buffer_.back() |= mul;
-    writer_.WriteUnordered(buffer_.data());
+    //writer_.WriteUnordered(buffer_.data());
   }
 
  private:
   unsigned k_;
   std::string output_prefix_;
   hash_set collection_;
-  EdgeWriter writer_;
+  //EdgeWriter writer_;
   unsigned last_shift_;
   unsigned words_per_kmer_;
   std::vector<uint32_t> buffer_;

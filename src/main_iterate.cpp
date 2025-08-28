@@ -37,6 +37,7 @@
 #include "iterate/kmer_collector.h"
 #include "sequence/io/async_sequence_reader.h"
 #include "utils/options_description.h"
+#include "libbloom/bloom.h"
 
 using std::string;
 using std::vector;
@@ -225,20 +226,27 @@ static bool ReadReadsAndProcessKernel(const IterOption &opt,
                                     mpienv);
   int64_t num_aligned_reads = 0;
   int64_t num_total_reads = 0;
+  int64_t num_iterative_edges = 0;
+
+  Bloom bloom(index.size(), 0.0001);
+  MPIEdgeWriter<KmerType> mpi_edgewiriter(opt.kmer_k, opt.output_prefix, mpienv);
 
   while (true) {
     const auto &read_pkg = reader.Next();
     if (read_pkg.seq_count() == 0) {
       break;
     }
-    num_aligned_reads += index.FindNextKmersFromReads(read_pkg, &collector, mpienv.rank, mpienv.nprocs);
+    num_aligned_reads += index.FindNextKmersFromReads(read_pkg, &collector, mpienv.rank, mpienv.nprocs, &bloom, &mpi_edgewiriter, &num_iterative_edges);
     num_total_reads += read_pkg.seq_count();
     xinfo("Processed: {}, aligned: {}. Iterative edges: {}\n", num_total_reads,
-          num_aligned_reads, collector.collection().size());
+          num_aligned_reads, num_iterative_edges);
   }
-  collector.FlushToFile();
+  //collector.FlushToFile();
+  mpi_edgewiriter.MPIFileWrite();
+  mpi_edgewiriter.allreduce();
+  mpi_edgewiriter.Finalize(mpienv);
   xinfo("Total: {}, aligned: {}. Iterative edges: {}\n", num_total_reads,
-        num_aligned_reads, collector.collection().size());
+        num_aligned_reads, num_iterative_edges);
   return true;
 }
 
@@ -288,19 +296,19 @@ struct Runner : public BaseRunner {
   ~Runner() override = default;
   void Run(const IterOption &opt, MPIEnviroment &mpienv) override {
     xinfo("Selected kmer type size for k: {}\n", sizeof(KmerType));
-    size_t vmrss_kb = getCurrentRSS_kb();
-    xinfo("start of iter currentRSS: {} KB\n", vmrss_kb);
     ContigFlankIndex<KmerType> index(opt.kmer_k, opt.step);
     ReadContigsAndBuildIndex(opt, opt.contig_file, &index, mpienv);
     ReadContigsAndBuildIndex(opt, opt.bubble_file, &index, mpienv);
     ReadReadsAndProcess(opt, index, mpienv);
-    vmrss_kb = getCurrentRSS_kb();
+    size_t vmrss_kb = getCurrentRSS_kb();
     xinfo("End of iter currentRSS: {} KB\n", vmrss_kb);
   }
   uint32_t max_k() const override { return KmerType::max_size(); }
 };
 
 int main_iterate(int argc, char **argv, MPIEnviroment &mpienv) {
+  size_t vmrss_kb = getCurrentRSS_kb();
+  xinfo("start of iter currentRSS: {} KB\n", vmrss_kb);
   AutoMaxRssRecorder recorder;
   IterOption opt;
   ParseItOptions(argc, argv, opt);

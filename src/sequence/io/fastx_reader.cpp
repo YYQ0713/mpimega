@@ -5,7 +5,6 @@
 #include "fastx_reader.h"
 #include <cassert>
 #include <stdexcept>
-#include <emmintrin.h>
 #include <cstdint>
 
 FastxReader::FastxReader(const std::string &file_name) {

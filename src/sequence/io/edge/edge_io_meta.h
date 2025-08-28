@@ -45,6 +45,20 @@ struct EdgeIoMetadata {
     }
   }
 
+  void UnorderSerialize(std::ofstream &os, MPIEnviroment &mpienv) {
+    os << "kmer_size " << kmer_size << '\n'
+       << "words_per_edge " << words_per_edge << '\n'
+       << "num_files " << num_files << '\n'
+       << "num_buckets " << buckets.size() << '\n'
+       << "num_edges " << num_edges << '\n'
+       << "is_sorted " << is_sorted << '\n';
+
+    for (unsigned i = 0; i < buckets.size(); ++i) {
+      os << i << ' ' << buckets[i].file_id << ' ' << buckets[i].file_offset
+         << ' ' << buckets[i].total_number << '\n';
+    }
+  }
+
   void Deserialize(std::ifstream &is) {
     unsigned num_buckets;
     ScanField(is, "kmer_size", kmer_size);
