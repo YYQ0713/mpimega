@@ -10,9 +10,18 @@ include_directories(${CMAKE_BINARY_DIR}/thirdparty/ga-5.8.2/gaf2c)
 
 add_subdirectory(thirdparty/fmt-11.2.0)
 
-set(TBB_TEST OFF CACHE BOOL "Disable TBB tests")
-set(TBB_EXAMPLES OFF CACHE BOOL "Disable TBB examples")
-add_subdirectory(thirdparty/oneTBB-2022.2.0)
+# 设置 RocksDB 的构建选项。
+# 这些选项必须在 add_subdirectory() 之前设置。
+set(ROCKSDB_BUILD_SHARED OFF CACHE BOOL "Build RocksDB static library" FORCE)
+set(WITH_GFLAGS OFF CACHE BOOL "Disable gflags dependency" FORCE)
+
+# 添加 RocksDB 子目录
+# 这里不带任何额外参数
+add_subdirectory(thirdparty/rocksdb-9.7.4)
+
+#set(TBB_TEST OFF CACHE BOOL "Disable TBB tests")
+#set(TBB_EXAMPLES OFF CACHE BOOL "Disable TBB examples")
+#add_subdirectory(thirdparty/oneTBB-2022.2.0)
 
 #if (CMAKE_VERSION VERSION_LESS "3.1")
 #    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
@@ -105,7 +114,7 @@ target_link_libraries(mpimeta_core
 		armci
 		comex
 		fmt::fmt
-		TBB::tbb)
+		rocksdb)
 target_link_libraries(mpimeta_core_popcnt 
 		ga
 		ga++
@@ -113,7 +122,7 @@ target_link_libraries(mpimeta_core_popcnt
 		armci
 		comex
 		fmt::fmt
-		TBB::tbb)
+		rocksdb)
 target_link_libraries(mpimeta_core_no_hw_accel 
 		ga
 		ga++
@@ -121,14 +130,14 @@ target_link_libraries(mpimeta_core_no_hw_accel
 		m
 		comex
 		fmt::fmt
-		TBB::tbb)
+		rocksdb)
 
 #target_include_directories(mpimeta_core PRIVATE thirdparty/zlib-ng-2.2.4)
 #target_include_directories(mpimeta_core_popcnt PRIVATE thirdparty/zlib-ng-2.2.4)
 #target_include_directories(mpimeta_core_no_hw_accel PRIVATE thirdparty/zlib-ng-2.2.4)
-target_include_directories(mpimeta_core PRIVATE thirdparty/oneTBB-2022.2.0/include)
-target_include_directories(mpimeta_core_popcnt PRIVATE thirdparty/oneTBB-2022.2.0/include)
-target_include_directories(mpimeta_core_no_hw_accel PRIVATE thirdparty/oneTBB-2022.2.0/include)
+#target_include_directories(mpimeta_core PRIVATE thirdparty/oneTBB-2022.2.0/include)
+#target_include_directories(mpimeta_core_popcnt PRIVATE thirdparty/oneTBB-2022.2.0/include)
+#target_include_directories(mpimeta_core_no_hw_accel PRIVATE thirdparty/oneTBB-2022.2.0/include)
 add_custom_target(
         mpimeta ALL
         COMMAND cp ${CMAKE_SOURCE_DIR}/src/mpimeta .

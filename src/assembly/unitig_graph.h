@@ -11,7 +11,6 @@
 #include "sparsepp/spp.h"
 #include "sdbg/sdbg.h"
 #include "unitig_graph_vertex.h"
-#include <tbb/parallel_sort.h>
 #include <algorithm>
 
 class UnitigGraph {
@@ -38,7 +37,7 @@ class UnitigGraph {
   void UniGather();
   void show_info(int rank);
   void vertices_resize(size_t size);
-  void vertices_sort();
+  // void vertices_sort();
   size_t vertices_size();
   std::string VertexToDNAString(VertexAdapter adapter);
   uint32_t VerticesIndexWithSdbgId(uint64_t sdbg_id); 

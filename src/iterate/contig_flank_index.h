@@ -15,6 +15,7 @@
 #include "sparsepp/spp.h"
 #include "libbloom/bloom.h"
 #include "sequence/io/edge/edge_writer.h"
+#include <rocksdb/db.h>
 
 template <class KmerType>
 class ContigFlankIndex {
@@ -86,14 +87,28 @@ class ContigFlankIndex {
 
   template <class CollectorType, class WriterType>
   size_t FindNextKmersFromReads(const SeqPackage &seq_pkg,
-                                CollectorType *out, int rank, int nprocs, Bloom *blf, WriterType *mpiwiriter, int64_t *num_edges) const {
+                                CollectorType *out, int rank, int nprocs, WriterType *mpiwiriter, int64_t *num_edges) const {
     std::vector<bool> kmer_exist;
     std::vector<float> kmer_mul;
     size_t num_aligned_reads = 0;
     size_t num_iter_edges = 0;
+    std::mutex shard_locks[8192];
 
     KmerHash hasher;
-    xinfo("iter test0\n");
+    rocksdb::DB* db;
+    rocksdb::Options options;
+    rocksdb::ReadOptions read_options;
+    rocksdb::WriteOptions write_options;
+    options.create_if_missing = true;
+    options.IncreaseParallelism();
+    options.OptimizeLevelStyleCompaction();
+
+    std::string db_path = mpiwiriter->RetFilePrefix() + ".rank." + std::to_string(rank);
+    rocksdb::Status status = rocksdb::DB::Open(options, db_path, &db);
+    if (!status.ok()) {
+        std::cerr << "Unable to open database: " << status.ToString() << std::endl;
+        return 1;
+    }
 
 #pragma omp parallel for reduction(+ : num_aligned_reads, num_iter_edges) private(kmer_exist, kmer_mul)
     for (unsigned seq_id = 0; seq_id < seq_pkg.seq_count(); ++seq_id) {
@@ -214,15 +229,38 @@ class ContigFlankIndex {
           assert(mul <= kMaxMul + 1);
 
           final_kmer = new_kmer < new_rkmer ? new_kmer : new_rkmer;
-          if (hasher(final_kmer) % nprocs == rank) {
+          auto hash_result = hasher(final_kmer);
+          if (hash_result % nprocs == rank) {
             // out->Insert(final_kmer,
             //             static_cast<mul_t>(
             //                 std::min(kMaxMul, static_cast<int>(mul + 0.5))));
 
-            if (!blf->bloom_check_add(final_kmer)) {
-              mpiwiriter->WriteToBuf(final_kmer, static_cast<mul_t>(std::min(kMaxMul, static_cast<int>(mul + 0.5))));
-              num_iter_edges++;
+            auto& lock = shard_locks[hash_result % 8192];
+            
+            rocksdb::Slice key_slice(reinterpret_cast<const char*>(final_kmer.data()), sizeof(final_kmer));
+            mul_t value_to_write = std::min(kMaxMul, static_cast<int>(mul + 0.5));
+            rocksdb::Slice value_slice(reinterpret_cast<const char*>(&value_to_write), sizeof(mul_t));
+            
+            std::string existing;
+            rocksdb::Status get_statu;
+
+            {
+              std::lock_guard<std::mutex> guard(lock);
+              get_statu = db->Get(read_options, key_slice, &existing);
+              if (get_statu.IsNotFound()) {
+                  rocksdb::Status write_status = db->Put(write_options, key_slice, value_slice);
+              }
             }
+
+            if (get_statu.IsNotFound()) {
+                mpiwiriter->WriteToBuf(final_kmer, value_to_write);
+                num_iter_edges++;
+            }
+
+            // if (!blf->bloom_check_add(final_kmer)) {
+            //   mpiwiriter->WriteToBuf(final_kmer, static_cast<mul_t>(std::min(kMaxMul, static_cast<int>(mul + 0.5))));
+            //   num_iter_edges++;
+            // }
           }
           success = true;
         }
@@ -234,6 +272,15 @@ class ContigFlankIndex {
         mpiwiriter->MPIFileWrite();
       }
     }
+
+    delete db;
+
+    rocksdb::Options cleanup_options;
+    status = rocksdb::DestroyDB(db_path, cleanup_options);
+    if (!status.ok()) {
+       std::cerr << "Failed to clean up database: " << status.ToString() << std::endl;
+    }
+
     *num_edges += num_iter_edges;
     return num_aligned_reads;
   }

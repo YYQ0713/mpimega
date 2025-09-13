@@ -634,11 +634,11 @@ void UnitigGraph::vertices_resize(size_t size) {
 }
 
 //按照strandinfo的begin升序排序
-void UnitigGraph::vertices_sort() {
-    tbb::parallel_sort(vertices_.begin(), vertices_.end(),
-        [](const UnitigGraphVertex& a, const UnitigGraphVertex& b) { return a.strand_info[0].begin < b.strand_info[0].begin; }
-    );
-}
+// void UnitigGraph::vertices_sort() {
+//     tbb::parallel_sort(vertices_.begin(), vertices_.end(),
+//         [](const UnitigGraphVertex& a, const UnitigGraphVertex& b) { return a.strand_info[0].begin < b.strand_info[0].begin; }
+//     );
+// }
 
 size_t UnitigGraph::vertices_size() {
     return vertices_.size();

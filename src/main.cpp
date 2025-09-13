@@ -143,13 +143,15 @@ Other Arguments:
 
 
 std::string inpipe_cmd(const std::string& fileName) {
-    if (fileName.size() > 3 && fileName.compare(fileName.size() - 3, 3, ".gz") == 0) {
-        return "gzip -cd " + fileName;
-    } else if (fileName.size() > 4 && fileName.compare(fileName.size() - 4, 4, ".bz2") == 0) {
-        return "bzip2 -cd " + fileName;
-    } else {
-        return "";
-    }
+    // if (fileName.size() > 3 && fileName.compare(fileName.size() - 3, 3, ".gz") == 0) {
+    //     return "gzip -cd " + fileName;
+    // } else if (fileName.size() > 4 && fileName.compare(fileName.size() - 4, 4, ".bz2") == 0) {
+    //     return "bzip2 -cd " + fileName;
+    // } else {
+    //     return "";
+    // }
+
+    return "";
 }
 
 int execlp_cmd(const std::string& fileName) {
@@ -452,26 +454,26 @@ void build_library(Options &opt) {
     std::vector<std::string> fifos;
     std::vector<std::tuple<std::string, std::string>> to_decompress;
 
-    auto add = [&](const std::string& type, const std::string& file, int index) {
-        if (file.size() >= 3 && file.compare(file.size() - 3, 3, ".gz") == 0) {
-            to_decompress.emplace_back(file, inpipe_path(opt.temp_dir, type, index));
-        }
-    };
+    // auto add = [&](const std::string& type, const std::string& file, int index) {
+    //     if (file.size() >= 3 && file.compare(file.size() - 3, 3, ".gz") == 0) {
+    //         to_decompress.emplace_back(file, inpipe_path(opt.temp_dir, type, index));
+    //     }
+    // };
 
-    for (size_t i = 0; i < opt.pe12.size(); ++i) add("pe12", opt.pe12[i], i);
-    for (size_t i = 0; i < opt.pe1.size(); ++i) {
-        add("pe1", opt.pe1[i], i);
-        add("pe2", opt.pe2[i], i);
-    }
-    for (size_t i = 0; i < opt.se.size(); ++i) add("se", opt.se[i], i);
+    // for (size_t i = 0; i < opt.pe12.size(); ++i) add("pe12", opt.pe12[i], i);
+    // for (size_t i = 0; i < opt.pe1.size(); ++i) {
+    //     add("pe1", opt.pe1[i], i);
+    //     add("pe2", opt.pe2[i], i);
+    // }
+    // for (size_t i = 0; i < opt.se.size(); ++i) add("se", opt.se[i], i);
 
-    for (const auto& [infile, outfile] : to_decompress) {
-        std::cout << "Decompressing: " << infile << " -> " << outfile << std::endl;
-        if (!decompress_gz_file(infile, outfile)) {
-            std::cerr << "Error decompressing file." << std::endl;
-            exit(1);
-        }
-    }
+    // for (const auto& [infile, outfile] : to_decompress) {
+    //     std::cout << "Decompressing: " << infile << " -> " << outfile << std::endl;
+    //     if (!decompress_gz_file(infile, outfile)) {
+    //         std::cerr << "Error decompressing file." << std::endl;
+    //         exit(1);
+    //     }
+    // }
 
     std::vector<std::string> args = {"buildlib", opt.read_lib_path(), opt.read_lib_path()};
 

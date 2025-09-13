@@ -189,6 +189,7 @@ class MPIEdgeWriter {
 
   void SetNumThreads(int32_t num_threads) { metadata_.num_files = num_threads; }
   void SetFilePrefix(const std::string &prefix) { file_prefix_ = prefix; }
+  std::string RetFilePrefix() { return file_prefix_; }
   void SetNumBuckets(int num_buckets) {
     metadata_.buckets.clear();
     //metadata_.buckets_reduce.clear();
