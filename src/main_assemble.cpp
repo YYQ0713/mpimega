@@ -33,7 +33,7 @@
 #include "utils/options_description.h"
 #include "utils/utils.h"
 #include "mpienv/mpienv.hpp"
-
+#include "assembly/unitig_graph.h"
 using std::string;
 
 namespace {
@@ -121,31 +121,31 @@ void ParseAsmOption(int argc, char *argv[]) {
 
 }  // namespace
 
-class AsmOptions {
-  public:
-      string sdbg_name = "";
-      string output_prefix = "out";
-      int num_cpu_threads = 0;
-      int local_width = 1000;
-      int max_tip_len = -1;
-      int min_standalone = 200;
-      double min_depth = -1;
-      bool is_final_round = false;
-      int bubble_level = 2;
-      int merge_len = 20;
-      double merge_similar = 0.98;
-      int prune_level = 2;
-      double disconnect_ratio = 0.1;
-      double low_local_ratio = 0.2;
-      int cleaning_rounds = 5;
-      bool output_standalone = false;
-      bool careful_bubble = false;
+// class AsmOptions {
+//   public:
+//       string sdbg_name = "";
+//       string output_prefix = "out";
+//       int num_cpu_threads = 0;
+//       int local_width = 1000;
+//       int max_tip_len = -1;
+//       int min_standalone = 200;
+//       double min_depth = -1;
+//       bool is_final_round = false;
+//       int bubble_level = 2;
+//       int merge_len = 20;
+//       double merge_similar = 0.98;
+//       int prune_level = 2;
+//       double disconnect_ratio = 0.1;
+//       double low_local_ratio = 0.2;
+//       int cleaning_rounds = 5;
+//       bool output_standalone = false;
+//       bool careful_bubble = false;
 
-      string contig_file() { return output_prefix + ".contigs.fa"; }
-      string standalone_file() { return output_prefix + ".final.contigs.fa"; }
-      string addi_contig_file() { return output_prefix + ".addi.fa"; }
-      string bubble_file() { return output_prefix + ".bubble_seq.fa"; }
-};
+//       string contig_file() { return output_prefix + ".contigs.fa"; }
+//       string standalone_file() { return output_prefix + ".final.contigs.fa"; }
+//       string addi_contig_file() { return output_prefix + ".addi.fa"; }
+//       string bubble_file() { return output_prefix + ".bubble_seq.fa"; }
+// };
 
 void ParseAsmOption(int argc, char **argv, AsmOptions &opt) {
   for (int i = 1; i < argc; ++i) {
@@ -292,12 +292,12 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
   // construct unitig graph
   timer.reset();
   timer.start();
-  UnitigGraph graph(&dbg, mpienv);
+  UnitigGraph graph(&dbg, mpienv, opt);
   timer.stop();
   xinfo("unitig graph size: {}, time for building: {.3}\n", graph.size(),
   timer.elapsed());
-  //graph.Mpi_Bcast_vertices();
-  CalcAndPrintStat(graph);
+
+  //CalcAndPrintStat(graph);
   xinfo("sizeof(UnitigGraphVertex): {}\n", sizeof(UnitigGraphVertex));
 
   // set up bubble
@@ -335,6 +335,7 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
             num_bubbles, timer.elapsed());
       changed |= num_bubbles > 0;
     }
+
     // remove complex bubbles
     if (opt.bubble_level >= 2) {
       timer.reset();
@@ -345,7 +346,7 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
             num_bubbles, timer.elapsed());
       changed |= num_bubbles > 0;
     }
-    
+
     // disconnect
     timer.reset();
     timer.start();
@@ -355,7 +356,7 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
     xinfo("Number unitigs disconnected: {}, time: {.3}\n", num_disconnected,
           timer.elapsed());
     changed |= num_disconnected > 0;
-    
+
     // excessive pruning
     uint32_t num_excessive_pruned = 0;
     if (opt.prune_level >= 3) {
@@ -454,8 +455,14 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
     }
     timer.stop();
     xinfo("Time to output after local low depth unitigs removed: {}\n", timer.elapsed());
-    auto stat_changed = CalcAndPrintStat(graph, false, true);
+    //auto stat_changed = CalcAndPrintStat(graph, false, true);
   }
+
+  if (mpienv.rank == 0) {
+    graph.Destroy_db();
+  }
+  MPI_Barrier(MPI_COMM_WORLD);
+  
   vmrss_kb = getCurrentRSS_kb();
   xinfo("End of asm currentRSS: {} KB\n", vmrss_kb);
 

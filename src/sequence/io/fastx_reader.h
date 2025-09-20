@@ -24,7 +24,7 @@ class FastxReader : public BaseSequenceReader {
   virtual int64_t Read(SeqPackage *pkg, int64_t max_num, int64_t max_num_bases,
                        bool reverse);
   static void TrimN(const char *s, int len, int *out_bpos, int *out_epos);
-  static bool TrimQC(const char *s, int len, int *out_epos, int window = 4, int threshold = 15);
+  static bool TrimQC(const char *s, int len, int *out_epos, int window = 4, int threshold = 10);
 
   kseq_t *ReadNext() {
     if (kseq_reader_ && kseq_read(kseq_reader_) >= 0) {

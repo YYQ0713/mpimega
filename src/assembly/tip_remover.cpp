@@ -71,13 +71,15 @@ uint32_t RemoveTips(UnitigGraph &graph, uint32_t max_tip_len, MPIEnviroment &mpi
   //   }
   // }
   // return num_removed;
+  
   uint32_t num_removed = 0;
   for (uint32_t thre = 2; thre < max_tip_len;
        thre = std::min(thre * 2, max_tip_len)) {
+    graph.OpenReadOnly_db();
 #pragma omp parallel for reduction(+ : num_removed)
     for (UnitigGraph::size_type i = 0; i < graph.size(); ++i) {
       auto adapter = graph.MakeVertexAdapter(i);
-      if (adapter.GetLength() >= thre) {
+      if (adapter.GetLength() >= thre || graph.is_del(i)) {
         continue;
       }
       if (adapter.IsStandalone()) {
@@ -108,6 +110,7 @@ uint32_t RemoveTips(UnitigGraph &graph, uint32_t max_tip_len, MPIEnviroment &mpi
         }
       }
     }
+    graph.Delete_db();
 
     graph.Refresh(false);
     if (thre >= max_tip_len) {

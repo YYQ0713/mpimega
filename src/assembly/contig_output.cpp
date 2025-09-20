@@ -133,8 +133,12 @@ void MPIOutputContigs(UnitigGraph &graph, MPIContigWriter *contig_writer,
   int64_t remain = graph.size() % mpienv.nprocs;
   int64_t start_index = mpienv.rank * num_edges_mean + (mpienv.rank < remain ? mpienv.rank : remain);
   int64_t end_index = start_index + num_edges_mean + (mpienv.rank < remain ? 1 : 0);
+  graph.OpenReadOnly_db();
 #pragma omp parallel for
   for (UnitigGraph::size_type i = start_index; i < end_index; ++i) {
+    if (graph.is_del(i)) {
+      continue;
+    }
     auto adapter = graph.MakeVertexAdapter(i);
     double multi = change_only ? 1
                                : std::min(static_cast<double>(kMaxMul),
@@ -199,4 +203,5 @@ void MPIOutputContigs(UnitigGraph &graph, MPIContigWriter *contig_writer,
     contig_writer->MPIFileWrite();
     contig_writer->allreduce();
   }
+  graph.Delete_db();
 }

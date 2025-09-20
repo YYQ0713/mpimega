@@ -213,6 +213,7 @@ size_t BaseBubbleRemover::PopBubbles(UnitigGraph &graph, bool permanent_rm,
                                      uint32_t max_len,
                                      const checker_type &checker, MPIEnviroment &mpienv) {
   uint32_t num_removed = 0;
+  graph.OpenReadOnly_db();
   //AtomicBitVector to_delete(graph.size());
   //int64_t num_edges_mean = graph.size() / mpienv.nprocs;
   //int64_t remain = graph.size() % mpienv.nprocs;         
@@ -220,6 +221,9 @@ size_t BaseBubbleRemover::PopBubbles(UnitigGraph &graph, bool permanent_rm,
   //int64_t end_index = start_index + num_edges_mean + (mpienv.rank < remain ? 1 : 0);
 #pragma omp parallel for reduction(+ : num_removed)
   for (UnitigGraph::size_type i = 0; i < graph.size(); i++) {
+    if (graph.is_del(i)) {
+        continue;
+    }
     UnitigGraph::VertexAdapter adapter = graph.MakeVertexAdapter(i);
     if (adapter.IsStandalone()) {
       continue;
@@ -240,7 +244,7 @@ size_t BaseBubbleRemover::PopBubbles(UnitigGraph &graph, bool permanent_rm,
 //       adapter.SetToDelete();
 //     }
 //   }
-
+  graph.Delete_db();
   graph.Refresh(!permanent_rm);
   return num_removed;
 }

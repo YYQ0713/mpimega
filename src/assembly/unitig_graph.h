@@ -12,6 +12,37 @@
 #include "sdbg/sdbg.h"
 #include "unitig_graph_vertex.h"
 #include <algorithm>
+#include <rocksdb/db.h>
+#include <rocksdb/iterator.h>
+#include <rocksdb/options.h>
+#include <rocksdb/table.h>
+#include <rocksdb/filter_policy.h>
+
+class AsmOptions {
+  public:
+      string sdbg_name = "";
+      string output_prefix = "out";
+      int num_cpu_threads = 0;
+      int local_width = 1000;
+      int max_tip_len = -1;
+      int min_standalone = 200;
+      double min_depth = -1;
+      bool is_final_round = false;
+      int bubble_level = 2;
+      int merge_len = 20;
+      double merge_similar = 0.98;
+      int prune_level = 2;
+      double disconnect_ratio = 0.1;
+      double low_local_ratio = 0.2;
+      int cleaning_rounds = 5;
+      bool output_standalone = false;
+      bool careful_bubble = false;
+
+      string contig_file() { return output_prefix + ".contigs.fa"; }
+      string standalone_file() { return output_prefix + ".final.contigs.fa"; }
+      string addi_contig_file() { return output_prefix + ".addi.fa"; }
+      string bubble_file() { return output_prefix + ".bubble_seq.fa"; }
+};
 
 class UnitigGraph {
  public:
@@ -23,7 +54,7 @@ class UnitigGraph {
   static const size_type kNullVertexID = kMaxNumVertices + 1;
 
  public:
-  explicit UnitigGraph(SDBG *sdbg, MPIEnviroment &mpienv);
+  explicit UnitigGraph(SDBG *sdbg, MPIEnviroment &mpienv, AsmOptions &opt);
   UnitigGraph(const UnitigGraph &) = delete;
   UnitigGraph(const UnitigGraph &&) = delete;
   ~UnitigGraph() = default;
@@ -41,6 +72,12 @@ class UnitigGraph {
   size_t vertices_size();
   std::string VertexToDNAString(VertexAdapter adapter);
   uint32_t VerticesIndexWithSdbgId(uint64_t sdbg_id); 
+  void init_db(AsmOptions &opt);
+  void OpenReadWrite_db();
+  void OpenReadOnly_db();
+  void Delete_db();
+  bool is_del(uint32_t vtx_id);
+  void Destroy_db();
 
  public:
   /*
@@ -151,9 +188,12 @@ class UnitigGraph {
 
    private:
     AdapterType MakeVertexAdapterWithSdbgId(uint64_t sdbg_id) {
-      uint32_t id = graph_->id_map_.at(sdbg_id);
-      //uint32_t id = graph_->VerticesIndexWithSdbgId(sdbg_id);
-      //printf("sdbg_id: {%ld};id: {%d}\n", sdbg_id, id);
+      rocksdb::Slice key_slice(reinterpret_cast<const char*>(&sdbg_id), sizeof(uint64_t));
+      std::string retrieved_value_str;
+      graph_->db_->Get(rocksdb::ReadOptions(), key_slice, &retrieved_value_str);
+      uint32_t id = *reinterpret_cast<const uint32_t*>(retrieved_value_str.data());
+      //uint32_t id = graph_->id_map_.at(sdbg_id);
+
       AdapterType adapter(graph_->vertices_[id], 0, id);
       if (adapter.b() != sdbg_id) {
         adapter.ReverseComplement();
@@ -166,18 +206,24 @@ class UnitigGraph {
   };
 
   void RefreshDisconnected();
+  void RefreshDisconnectedRoot();
 
  private:
   SDBG *sdbg_{};
   MPIEnviroment mpienv_;
   //std::deque<UnitigGraphVertex> vertices_;
   std::vector<UnitigGraphVertex> vertices_;
+  kmlib::AtomicBitVector<uint8_t> vtx_del_flag_;
   //std::vector<UnitigGraphVertex> loop_vertices_;
-  //phmap::flat_hash_map<uint64_t, size_type> id_map_;
-  spp::sparse_hash_map<uint64_t, size_type> id_map_;
+  phmap::flat_hash_map<uint64_t, size_type> id_map_;
+  //spp::sparse_hash_map<uint64_t, size_type> id_map_;
   //spp::sparse_hash_map<uint64_t, uint64_t> strand_map_;
   AdapterImpl<VertexAdapter> adapter_impl_;
   AdapterImpl<SudoVertexAdapter> sudo_adapter_impl_;
+  rocksdb::DB* db_;
+  rocksdb::Options options_;
+  rocksdb::WriteOptions write_options_;
+  std::string db_path_;
 };
 
 class PackedRecord {

@@ -29,6 +29,8 @@ class Kmer {
 
   Kmer(const Kmer &kmer) { std::memcpy(data_, kmer.data_, sizeof(data_)); }
 
+  Kmer(const char* ptr) { std::memcpy(data_, ptr, sizeof(data_)); }
+
   Kmer(const word_type *seq, unsigned offset, unsigned k) {
     InitFromPtr(seq, offset, k);
   }

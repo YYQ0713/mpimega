@@ -114,11 +114,12 @@ bool RemoveLocalLowDepth(UnitigGraph &graph, double min_depth, uint32_t max_len,
   bool need_refresh = false;
   uint32_t removed = 0;
   std::atomic_bool is_changed{false};
+  graph.OpenReadOnly_db();
 
 #pragma omp parallel for reduction(+ : removed) reduction(|| : need_refresh)
   for (UnitigGraph::size_type i = 0; i < graph.size(); ++i) {
     auto adapter = graph.MakeVertexAdapter(i);
-    if (adapter.IsStandalone() || adapter.GetLength() > max_len) {
+    if (adapter.IsStandalone() || adapter.GetLength() > max_len || graph.is_del(i)) {
       continue;
     }
     int indegree = graph.InDegree(adapter);
@@ -148,6 +149,7 @@ bool RemoveLocalLowDepth(UnitigGraph &graph, double min_depth, uint32_t max_len,
       }
     }
   }
+  graph.Delete_db();
 
   if (need_refresh) {
     bool set_changed = !permanent_rm;
