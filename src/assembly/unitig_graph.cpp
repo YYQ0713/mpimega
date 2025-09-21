@@ -10,14 +10,14 @@
 #include "utils/mutex.h"
 #include "utils/utils.h"
 
-UnitigGraph::UnitigGraph(SDBG *sdbg, MPIEnviroment &mpienv, AsmOptions &opt)
+UnitigGraph::UnitigGraph(SDBG *sdbg, MPIEnviroment &mpienv)
     : sdbg_(sdbg), mpienv_(mpienv), adapter_impl_(this), sudo_adapter_impl_(this) {
   id_map_.clear();
   vertices_.clear();
   SpinLock path_lock;
   AtomicBitVector locks(sdbg_->size());
   size_t count_palindrome = 0;
-  init_db(opt);
+  //init_db(opt);
 
 // assemble simple paths
 #pragma omp parallel for reduction(+ : count_palindrome)
@@ -139,18 +139,12 @@ UnitigGraph::UnitigGraph(SDBG *sdbg, MPIEnviroment &mpienv, AsmOptions &opt)
   xinfo("Build uni graph befor gather and freeMulti currentRSS: {} KB\n", vmrss_kb);
   UniGather();
 
-  // vertices_.reserve(vertices_.size() + loop_vertices_.size());
-  // // 移动拼接，避免拷贝
-  // vertices_.insert(vertices_.end(), std::make_move_iterator(loop_vertices_.begin()), std::make_move_iterator(loop_vertices_.end()));
-  // // swap 释放 v2 的容量（缩容技巧）
-  // std::vector<UnitigGraphVertex>().swap(loop_vertices_);  // v2 清空且 capacity = 0
-
   xinfo("Graph size without loops: {}, palindrome: {}\n", vertices_.size(), count_palindrome);
 
   //show_info(mpienv.rank);
   //MPI_Barrier(MPI_COMM_WORLD); // Barrier
   //exit(0);
-  vtx_del_flag_.reset(vertices_.size());
+
   if (vertices_.size() >= kMaxNumVertices) {
     xfatal(
         "Too many vertices in the unitig graph ({} >= {}), "
@@ -158,45 +152,50 @@ UnitigGraph::UnitigGraph(SDBG *sdbg, MPIEnviroment &mpienv, AsmOptions &opt)
         vertices_.size(), kMaxNumVertices);
   }
   
-  //id_map_.reserve(vertices_.size() * 2 - count_palindrome);
-if (mpienv.rank == 0) {
-  
-  OpenReadWrite_db();
-  #pragma omp parallel
-  {
-    rocksdb::WriteBatch thread_batches;
-    int64_t b_key, rb_key;
-    #pragma omp for
-    for (size_type i = 0; i < vertices_.size(); ++i) {
-      VertexAdapter adapter(vertices_[i]);
-      
-      rocksdb::Slice value(reinterpret_cast<const char*>(&i), sizeof(size_type));
-      b_key = adapter.b();
-      rb_key = adapter.rb();
-      thread_batches.Put(rocksdb::Slice(reinterpret_cast<const char*>(&b_key), sizeof(int64_t)), value);
-      thread_batches.Put(rocksdb::Slice(reinterpret_cast<const char*>(&rb_key), sizeof(int64_t)), value);
-      //id_map_[adapter.b()] = i;
-      //id_map_[adapter.rb()] = i;
-      if (thread_batches.Count() > 4 * 1024 * 1024) { // 例如，1MB 的数据
-        // 提交线程的批次
-        rocksdb::Status write_status = db_->Write(write_options_, &thread_batches);
-        
-        // 提交后清空，准备新的批次
-        thread_batches.Clear();
-      } 
-    }
-    // 检查 WriteBatch 是否为空的正确逻辑
-    if (thread_batches.Count() > 0) {
-      //std::lock_guard<std::mutex> lock(db_mutex);
-      rocksdb::Status status = db_->Write(write_options_, &thread_batches);
-      if (!status.ok()) {
-        std::cerr << "Failed to write final batch: " << status.ToString() << std::endl;
-      }
-      thread_batches.Clear();
-    }
+  id_map_.reserve(vertices_.size() * 2 - count_palindrome);
+  for (size_type i = 0; i < vertices_.size(); ++i) {
+    VertexAdapter adapter(vertices_[i]);
+    id_map_[adapter.b()] = i;
+    id_map_[adapter.rb()] = i;
   }
-  Delete_db();
-}
+// if (mpienv.rank == 0) {
+  
+//   OpenReadWrite_db();
+//   #pragma omp parallel
+//   {
+//     rocksdb::WriteBatch thread_batches;
+//     int64_t b_key, rb_key;
+//     #pragma omp for
+//     for (size_type i = 0; i < vertices_.size(); ++i) {
+//       VertexAdapter adapter(vertices_[i]);
+      
+//       rocksdb::Slice value(reinterpret_cast<const char*>(&i), sizeof(size_type));
+//       b_key = adapter.b();
+//       rb_key = adapter.rb();
+//       thread_batches.Put(rocksdb::Slice(reinterpret_cast<const char*>(&b_key), sizeof(int64_t)), value);
+//       thread_batches.Put(rocksdb::Slice(reinterpret_cast<const char*>(&rb_key), sizeof(int64_t)), value);
+//       //id_map_[adapter.b()] = i;
+//       //id_map_[adapter.rb()] = i;
+//       if (thread_batches.Count() > 4 * 1024 * 1024) { // 例如，1MB 的数据
+//         // 提交线程的批次
+//         rocksdb::Status write_status = db_->Write(write_options_, &thread_batches);
+        
+//         // 提交后清空，准备新的批次
+//         thread_batches.Clear();
+//       } 
+//     }
+//     // 检查 WriteBatch 是否为空的正确逻辑
+//     if (thread_batches.Count() > 0) {
+//       //std::lock_guard<std::mutex> lock(db_mutex);
+//       rocksdb::Status status = db_->Write(write_options_, &thread_batches);
+//       if (!status.ok()) {
+//         std::cerr << "Failed to write final batch: " << status.ToString() << std::endl;
+//       }
+//       thread_batches.Clear();
+//     }
+//   }
+//   Delete_db();
+// }
 
   vmrss_kb = getCurrentRSS_kb();
   xinfo("Build uni graph and idmap currentRSS: {} KB\n", vmrss_kb);
@@ -205,11 +204,11 @@ if (mpienv.rank == 0) {
 }
 
 void UnitigGraph::RefreshDisconnected() {
-  //SpinLock mutex;
+  SpinLock mutex;
 #pragma omp parallel for
   for (size_type i = 0; i < vertices_.size(); ++i) {
     auto adapter = MakeSudoAdapter(i);
-    if (adapter.IsToDelete() || adapter.IsPalindrome() || adapter.IsLoop() || vtx_del_flag_.at(i)) {
+    if (adapter.IsToDelete() || adapter.IsPalindrome() || adapter.IsLoop()) {
       continue;
     }
 
@@ -262,118 +261,26 @@ void UnitigGraph::RefreshDisconnected() {
     adapter.SetLength(new_length);
     adapter.SetTotalDepth(new_total_depth);
 
-    // std::lock_guard<SpinLock> lk(mutex);
-    // if (to_disconnect) {
-    //   id_map_.erase(old_start);
-    //   id_map_[new_start] = i;
-    // }
-    // if (rc_to_disconnect) {
-    //   id_map_.erase(old_rc_start);
-    //   id_map_[new_rc_start] = i;
-    // }
-  }
-}
-
-void UnitigGraph::RefreshDisconnectedRoot() {
-  OpenReadWrite_db();
-  //SpinLock mutex;
-#pragma omp parallel for
-  for (size_type i = 0; i < vertices_.size(); ++i) {
-    auto adapter = MakeSudoAdapter(i);
-    if (adapter.IsToDelete() || adapter.IsPalindrome() || adapter.IsLoop() || vtx_del_flag_.at(i)) {
-      continue;
-    }
-
-    uint8_t to_disconnect = adapter.IsToDisconnect();
-    adapter.ReverseComplement();
-    uint8_t rc_to_disconnect = adapter.IsToDisconnect();
-    adapter.ReverseComplement();
-
-    if (!to_disconnect && !rc_to_disconnect) {
-      continue;
-    }
-
-    if (adapter.GetLength() <= to_disconnect + rc_to_disconnect) {
-      adapter.SetToDelete();
-      continue;
-    }
-
-    auto old_start = adapter.b();
-    auto old_end = adapter.e();
-    auto old_rc_start = adapter.rb();
-    auto old_rc_end = adapter.re();
-    uint64_t new_start, new_end, new_rc_start, new_rc_end;
-
+    std::lock_guard<SpinLock> lk(mutex);
     if (to_disconnect) {
-      new_start = sdbg_->NextSimplePathEdge(old_start);
-      new_rc_end = sdbg_->PrevSimplePathEdge(old_rc_end);
-      assert(new_start != SDBG::kNullID && new_rc_end != SDBG::kNullID);
-      sdbg_->SetInvalidEdge(old_start);
-      sdbg_->SetInvalidEdge(old_rc_end);
-    } else {
-      new_start = old_start;
-      new_rc_end = old_rc_end;
-    }
-
-    if (rc_to_disconnect) {
-      new_rc_start = sdbg_->NextSimplePathEdge(old_rc_start);
-      new_end = sdbg_->PrevSimplePathEdge(old_end);
-      assert(new_rc_start != SDBG::kNullID && new_end != SDBG::kNullID);
-      sdbg_->SetInvalidEdge(old_rc_start);
-      sdbg_->SetInvalidEdge(old_end);
-    } else {
-      new_rc_start = old_rc_start;
-      new_end = old_end;
-    }
-
-    uint32_t new_length =
-        adapter.GetLength() - to_disconnect - rc_to_disconnect;
-    uint64_t new_total_depth = lround(adapter.GetAvgDepth() * new_length);
-    adapter.SetBeginEnd(new_start, new_end, new_rc_start, new_rc_end);
-    adapter.SetLength(new_length);
-    adapter.SetTotalDepth(new_total_depth);
-
-    //std::lock_guard<SpinLock> lk(mutex);
-    if (to_disconnect) {
-      rocksdb::Slice old_key_slice(reinterpret_cast<const char*>(&old_start), sizeof(uint64_t));
-      rocksdb::Slice new_key_slice(reinterpret_cast<const char*>(&new_start), sizeof(uint64_t));
-      rocksdb::Slice value(reinterpret_cast<const char*>(&i), sizeof(size_type));
-      db_->Delete(write_options_, old_key_slice);
-      db_->Put(write_options_, new_key_slice, value);
-      // id_map_.erase(old_start);
-      // id_map_[new_start] = i;
+      id_map_.erase(old_start);
+      id_map_[new_start] = i;
     }
     if (rc_to_disconnect) {
-      rocksdb::Slice old_key_slice(reinterpret_cast<const char*>(&old_rc_start), sizeof(uint64_t));
-      rocksdb::Slice new_key_slice(reinterpret_cast<const char*>(&new_rc_start), sizeof(uint64_t));
-      rocksdb::Slice value(reinterpret_cast<const char*>(&i), sizeof(size_type));
-      db_->Delete(write_options_, old_key_slice);
-      db_->Put(write_options_, new_key_slice, value);
-      // id_map_.erase(old_rc_start);
-      // id_map_[new_rc_start] = i;
+      id_map_.erase(old_rc_start);
+      id_map_[new_rc_start] = i;
     }
   }
-  Delete_db();
 }
 
 void UnitigGraph::Refresh(bool set_changed) {
-  MPI_Barrier(MPI_COMM_WORLD);
   static const uint8_t kDeleted = 0x1;
   static const uint8_t kVisited = 0x2;
-
-  if (mpienv_.rank == 0) {
-    RefreshDisconnectedRoot();
-  } else {
-    RefreshDisconnected();
-  }
-
-  MPI_Barrier(MPI_COMM_WORLD);
-  OpenReadOnly_db();
-
+  RefreshDisconnected();
 #pragma omp parallel for
   for (size_type i = 0; i < vertices_.size(); ++i) {
     auto adapter = MakeSudoAdapter(i);
-    if (!adapter.IsToDelete() || vtx_del_flag_.at(i)) {
+    if (!adapter.IsToDelete()) {
       continue;
     }
     adapter.SetFlag(kDeleted);
@@ -400,7 +307,7 @@ void UnitigGraph::Refresh(bool set_changed) {
 #pragma omp parallel for
   for (size_type i = 0; i < vertices_.size(); ++i) {
     auto adapter = MakeSudoAdapter(i);
-    if (adapter.IsStandalone() || (adapter.GetFlag() & kDeleted) || vtx_del_flag_.at(i)) {
+    if (adapter.IsStandalone() || (adapter.GetFlag() & kDeleted)) {
       continue;
     }
     for (int strand = 0; strand < 2; ++strand, adapter.ReverseComplement()) {
@@ -458,8 +365,8 @@ void UnitigGraph::Refresh(bool set_changed) {
       adapter.SetBeginEnd(new_start, new_end, new_rc_start, new_rc_end);
       adapter.SetLength(new_length);
       adapter.SetTotalDepth(new_total_depth);
-      // if (set_changed) adapter.SetChanged();
-      adapter.SetChanged();
+      if (set_changed) adapter.SetChanged();
+
       break;
     }
   }
@@ -468,9 +375,6 @@ void UnitigGraph::Refresh(bool set_changed) {
   //std::mutex mutex;
 //#pragma omp parallel for
   for (size_type i = 0; i < vertices_.size(); ++i) {
-    if (vtx_del_flag_.at(i)) {
-        continue;
-    }
     auto adapter = MakeSudoAdapter(i);
     if (!adapter.IsStandalone() && !adapter.GetFlag()) {
       //std::lock_guard<std::mutex> lk(mutex);
@@ -503,94 +407,27 @@ void UnitigGraph::Refresh(bool set_changed) {
       adapter.SetLength(length);
       adapter.SetTotalDepth(total_depth);
       adapter.SetLooped();
-      // if (set_changed) adapter.SetChanged();
-      adapter.SetChanged();
+      if (set_changed) adapter.SetChanged();
     }
   }
-  Delete_db();
-  // vertices_.resize(std::remove_if(vertices_.begin(), vertices_.end(),
-  //                                 [](UnitigGraphVertex &a) {
-  //                                   return SudoVertexAdapter(a).GetFlag() &
-  //                                          kDeleted;
-  //                                 }) -
-  //                  vertices_.begin());
 
-  MPI_Barrier(MPI_COMM_WORLD);
-  if (mpienv_.rank == 0) {
-    OpenReadWrite_db();
-    #pragma omp parallel for
-    for (size_t i = 0; i < vertices_.size(); ++i) {
-      if (vtx_del_flag_.at(i)) {
-          continue;
-      }
-      auto adapter = MakeSudoAdapter(i);
+  vertices_.resize(std::remove_if(vertices_.begin(), vertices_.end(),
+                                  [](UnitigGraphVertex &a) {
+                                    return SudoVertexAdapter(a).GetFlag() &
+                                           kDeleted;
+                                  }) -
+                   vertices_.begin());
 
-      if (adapter.GetFlag() & kDeleted) {
-        auto oldb = adapter.b();
-        auto oldrb = adapter.rb();
-        rocksdb::Slice old_b_slice(reinterpret_cast<const char*>(&oldb), sizeof(uint64_t));
-        rocksdb::Slice old_rb_slice(reinterpret_cast<const char*>(&oldrb), sizeof(uint64_t));
-
-        //db_->Delete(write_options_, old_b_slice);
-        //db_->Delete(write_options_, old_rb_slice);
-        vtx_del_flag_.try_lock(i);
-      }
-    }
-
-    size_type num_changed = 0;
-
-    #pragma omp parallel for reduction(+ : num_changed)
-    for (size_type i = 0; i < vertices_.size(); ++i) {
-      if (vtx_del_flag_.at(i)) {
-        continue;
-      }
-      auto adapter = MakeSudoAdapter(i);
-      assert(adapter.IsStandalone() || adapter.GetFlag());
-      adapter.SetFlag(0);
-      //id_map_.at(adapter.b()) = i;
-      //id_map_.at(adapter.rb()) = i;
-      num_changed += adapter.IsChanged();
-      if (adapter.IsChanged()) {
-        auto newb = adapter.b();
-        auto newrb = adapter.rb();
-        rocksdb::Slice value(reinterpret_cast<const char*>(&i), sizeof(size_type));
-        rocksdb::Slice new_b_slice(reinterpret_cast<const char*>(&newb), sizeof(uint64_t));
-        rocksdb::Slice new_rb_slice(reinterpret_cast<const char*>(&newrb), sizeof(uint64_t));
-        db_->Put(write_options_, new_b_slice, value);
-        db_->Put(write_options_, new_rb_slice, value);
-      }
-      
-    }
-    Delete_db();
-  } else {
-    #pragma omp parallel for
-    for (size_t i = 0; i < vertices_.size(); ++i) {
-      if (vtx_del_flag_.at(i)) {
-          continue;
-      }
-      auto adapter = MakeSudoAdapter(i);
-
-      if (adapter.GetFlag() & kDeleted) {
-        vtx_del_flag_.try_lock(i);
-      }
-    }
-
-    size_type num_changed = 0;
-
-    #pragma omp parallel for reduction(+ : num_changed)
-    for (size_type i = 0; i < vertices_.size(); ++i) {
-      if (vtx_del_flag_.at(i)) {
-        continue;
-      }
-      auto adapter = MakeSudoAdapter(i);
-      assert(adapter.IsStandalone() || adapter.GetFlag());
-      adapter.SetFlag(0);
-      //id_map_.at(adapter.b()) = i;
-      //id_map_.at(adapter.rb()) = i;
-      num_changed += adapter.IsChanged();
-    }
+  size_type num_changed = 0;
+#pragma omp parallel for reduction(+ : num_changed)
+  for (size_type i = 0; i < vertices_.size(); ++i) {
+    auto adapter = MakeSudoAdapter(i);
+    assert(adapter.IsStandalone() || adapter.GetFlag());
+    adapter.SetFlag(0);
+    id_map_.at(adapter.b()) = i;
+    id_map_.at(adapter.rb()) = i;
+    num_changed += adapter.IsChanged();
   }
-  MPI_Barrier(MPI_COMM_WORLD);
 }
 
 std::string UnitigGraph::VertexToDNAString(VertexAdapter v) {
@@ -862,91 +699,91 @@ uint32_t UnitigGraph::VerticesIndexWithSdbgId(uint64_t sdbg_id) {
     return -1;
 }
 
-void UnitigGraph::init_db(AsmOptions &opt) {
-  options_.create_if_missing = true;
-  options_.IncreaseParallelism(opt.num_cpu_threads / 2);
-  options_.max_background_jobs = opt.num_cpu_threads / 2; 
-  // Write Buffer & Memtable 设置
-  options_.write_buffer_size = 512 * 1024 * 1024; // 每个 memtable 256MB
-  options_.max_write_buffer_number = 8;          // 最多 8 个 memtable
-  options_.min_write_buffer_number_to_merge = 2; // 减少 flush 频率
+// void UnitigGraph::init_db(AsmOptions &opt) {
+//   options_.create_if_missing = true;
+//   options_.IncreaseParallelism(opt.num_cpu_threads / 2);
+//   options_.max_background_jobs = opt.num_cpu_threads / 2; 
+//   // Write Buffer & Memtable 设置
+//   options_.write_buffer_size = 1ULL * 1024ULL * 1024ULL * 1024ULL; // 每个 memtable 1GB
+//   options_.max_write_buffer_number = 16;          // 最多 16 个 memtable
+//   options_.min_write_buffer_number_to_merge = 2; // 减少 flush 频率
 
-  // Level-Compaction 优化
-  options_.OptimizeUniversalStyleCompaction();   // Universal compaction 更适合写多
-  options_.compaction_style = rocksdb::kCompactionStyleUniversal;
-  options_.compaction_options_universal.size_ratio = 20;
-  options_.compaction_options_universal.min_merge_width = 2;
-  options_.compaction_options_universal.max_size_amplification_percent = 300;
+//   // Level-Compaction 优化
+//   options_.OptimizeUniversalStyleCompaction();   // Universal compaction 更适合写多
+//   options_.compaction_style = rocksdb::kCompactionStyleUniversal;
+//   options_.compaction_options_universal.size_ratio = 20;
+//   options_.compaction_options_universal.min_merge_width = 2;
+//   options_.compaction_options_universal.max_size_amplification_percent = 300;
 
-  // 文件大小 & compaction 触发阈值
-  options_.target_file_size_base = 512 * 1024 * 1024; // 每个 SST 文件更大，减少文件数量
-  options_.level0_file_num_compaction_trigger = 8;    // L0 文件超过 8 就触发 compaction
-  options_.level0_slowdown_writes_trigger = 20;       // 超过 20 慢写
-  options_.level0_stop_writes_trigger = 40;           // 超过 40 停止写入，保护系统
+//   // 文件大小 & compaction 触发阈值
+//   options_.target_file_size_base = 1024ULL * 1024ULL * 1024ULL; // 每个 SST 文件更大，减少文件数量
+//   options_.level0_file_num_compaction_trigger = 8;    // L0 文件超过 8 就触发 compaction
+//   options_.level0_slowdown_writes_trigger = 20;       // 超过 20 慢写
+//   options_.level0_stop_writes_trigger = 40;           // 超过 40 停止写入，保护系统
 
-  // 压缩算法选择
-  options_.compression = rocksdb::kNoCompression;     // 写入密集，直接不压缩
-  options_.bottommost_compression = rocksdb::kLZ4Compression; // 只有最后一层压缩，节省空间
+//   // 压缩算法选择
+//   options_.compression = rocksdb::kNoCompression;     // 写入密集，直接不压缩
+//   options_.bottommost_compression = rocksdb::kLZ4Compression; // 只有最后一层压缩，节省空间
 
-  // I/O 优化
-  options_.use_direct_io_for_flush_and_compaction = true;
-  options_.use_direct_reads = true;
-  options_.bytes_per_sync = 2 * 1024 * 1024;  // 每写 2MB 刷一次，平滑写入
-  options_.wal_bytes_per_sync = 1 * 1024 * 1024;
+//   // I/O 优化
+//   options_.use_direct_io_for_flush_and_compaction = true;
+//   options_.use_direct_reads = true;
+//   options_.bytes_per_sync = 16 * 1024 * 1024;  // 每写 2MB 刷一次，平滑写入
+//   options_.wal_bytes_per_sync = 1 * 1024 * 1024;
 
-  // Table Format & Cache
-  rocksdb::BlockBasedTableOptions table_options;
-  table_options.block_cache = rocksdb::NewLRUCache(1024 * 1024 * 1024); // 缓存 256MB block
-  table_options.cache_index_and_filter_blocks = true;
-  table_options.pin_l0_filter_and_index_blocks_in_cache = true;
-  table_options.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10, false)); // 可选
-  options_.table_factory.reset(NewBlockBasedTableFactory(table_options));
+//   // Table Format & Cache
+//   rocksdb::BlockBasedTableOptions table_options;
+//   table_options.block_cache = rocksdb::NewLRUCache(8ULL * 1024ULL * 1024ULL * 1024ULL, 8); // 缓存 8GB block
+//   table_options.cache_index_and_filter_blocks = true;
+//   table_options.pin_l0_filter_and_index_blocks_in_cache = true;
+//   table_options.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10, false)); // 可选
+//   options_.table_factory.reset(NewBlockBasedTableFactory(table_options));
 
-  // WriteOptions (批量写入场景可以关 WAL)
-  write_options_.disableWAL = true; 
-  write_options_.sync = false;      // 不强制同步 WAL
+//   // WriteOptions (批量写入场景可以关 WAL)
+//   write_options_.disableWAL = true; 
+//   write_options_.sync = false;      // 不强制同步 WAL
 
-  db_path_ = opt.output_prefix + "_rocksdb";
-}
+//   db_path_ = opt.output_prefix + "_rocksdb";
+// }
 
-void UnitigGraph::OpenReadWrite_db() {
-  options_.create_if_missing = true;
+// void UnitigGraph::OpenReadWrite_db() {
+//   options_.create_if_missing = true;
 
-  rocksdb::Status status = rocksdb::DB::Open(options_, db_path_, &db_);
-  if (!status.ok()) {
-      std::cerr << "Failed to open DB in read-write mode: " << status.ToString() << std::endl;
-  }
+//   rocksdb::Status status = rocksdb::DB::Open(options_, db_path_, &db_);
+//   if (!status.ok()) {
+//       std::cerr << "Failed to open DB in read-write mode: " << status.ToString() << std::endl;
+//   }
 
-  //xinfo("Successfully opened DB in read-write mode.\n");
-}
+//   //xinfo("Successfully opened DB in read-write mode.\n");
+// }
 
-void UnitigGraph::OpenReadOnly_db() {
-  // ReadOnly 模式下，不需要创建数据库
-  options_.create_if_missing = false; 
+// void UnitigGraph::OpenReadOnly_db() {
+//   // ReadOnly 模式下，不需要创建数据库
+//   options_.create_if_missing = false; 
 
-  // force_consistency 设置为 true 可以保证数据一致性
-  bool force_consistency = true; 
+//   // force_consistency 设置为 true 可以保证数据一致性
+//   bool force_consistency = true; 
   
-  rocksdb::Status status = rocksdb::DB::OpenForReadOnly(options_, db_path_, &db_, force_consistency);
-  if (!status.ok()) {
-      std::cerr << "Failed to open DB in read-only mode: " << status.ToString() << std::endl;
-  }
+//   rocksdb::Status status = rocksdb::DB::OpenForReadOnly(options_, db_path_, &db_, force_consistency);
+//   if (!status.ok()) {
+//       std::cerr << "Failed to open DB in read-only mode: " << status.ToString() << std::endl;
+//   }
 
-  //xinfo("Successfully opened DB in read-only mode.\n");
-}
+//   //xinfo("Successfully opened DB in read-only mode.\n");
+// }
 
-void UnitigGraph::Delete_db() {
-  delete db_;
-}
+// void UnitigGraph::Delete_db() {
+//   delete db_;
+// }
 
-bool UnitigGraph::is_del(uint32_t vtx_id) {
-  return vtx_del_flag_.at(vtx_id);
-}
+// bool UnitigGraph::is_del(uint32_t vtx_id) {
+//   return vtx_del_flag_.at(vtx_id);
+// }
 
-void UnitigGraph::Destroy_db() {
-  rocksdb::Options cleanup_options;
-  rocksdb::Status status = rocksdb::DestroyDB(db_path_, cleanup_options);
-  if (!status.ok()) {
-      std::cerr << "Failed to clean up database: " << status.ToString() << std::endl;
-  }
-}
+// void UnitigGraph::Destroy_db() {
+//   rocksdb::Options cleanup_options;
+//   rocksdb::Status status = rocksdb::DestroyDB(db_path_, cleanup_options);
+//   if (!status.ok()) {
+//       std::cerr << "Failed to clean up database: " << status.ToString() << std::endl;
+//   }
+// }

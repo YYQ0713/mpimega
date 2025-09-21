@@ -54,7 +54,7 @@ class UnitigGraph {
   static const size_type kNullVertexID = kMaxNumVertices + 1;
 
  public:
-  explicit UnitigGraph(SDBG *sdbg, MPIEnviroment &mpienv, AsmOptions &opt);
+  explicit UnitigGraph(SDBG *sdbg, MPIEnviroment &mpienv);
   UnitigGraph(const UnitigGraph &) = delete;
   UnitigGraph(const UnitigGraph &&) = delete;
   ~UnitigGraph() = default;
@@ -72,12 +72,12 @@ class UnitigGraph {
   size_t vertices_size();
   std::string VertexToDNAString(VertexAdapter adapter);
   uint32_t VerticesIndexWithSdbgId(uint64_t sdbg_id); 
-  void init_db(AsmOptions &opt);
-  void OpenReadWrite_db();
-  void OpenReadOnly_db();
-  void Delete_db();
-  bool is_del(uint32_t vtx_id);
-  void Destroy_db();
+  // void init_db(AsmOptions &opt);
+  // void OpenReadWrite_db();
+  // void OpenReadOnly_db();
+  // void Delete_db();
+  // bool is_del(uint32_t vtx_id);
+  // void Destroy_db();
 
  public:
   /*
@@ -188,12 +188,7 @@ class UnitigGraph {
 
    private:
     AdapterType MakeVertexAdapterWithSdbgId(uint64_t sdbg_id) {
-      rocksdb::Slice key_slice(reinterpret_cast<const char*>(&sdbg_id), sizeof(uint64_t));
-      std::string retrieved_value_str;
-      graph_->db_->Get(rocksdb::ReadOptions(), key_slice, &retrieved_value_str);
-      uint32_t id = *reinterpret_cast<const uint32_t*>(retrieved_value_str.data());
-      //uint32_t id = graph_->id_map_.at(sdbg_id);
-
+      uint32_t id = graph_->id_map_.at(sdbg_id);
       AdapterType adapter(graph_->vertices_[id], 0, id);
       if (adapter.b() != sdbg_id) {
         adapter.ReverseComplement();
@@ -206,24 +201,23 @@ class UnitigGraph {
   };
 
   void RefreshDisconnected();
-  void RefreshDisconnectedRoot();
 
  private:
   SDBG *sdbg_{};
   MPIEnviroment mpienv_;
   //std::deque<UnitigGraphVertex> vertices_;
   std::vector<UnitigGraphVertex> vertices_;
-  kmlib::AtomicBitVector<uint8_t> vtx_del_flag_;
+  //kmlib::AtomicBitVector<uint8_t> vtx_del_flag_;
   //std::vector<UnitigGraphVertex> loop_vertices_;
   phmap::flat_hash_map<uint64_t, size_type> id_map_;
   //spp::sparse_hash_map<uint64_t, size_type> id_map_;
   //spp::sparse_hash_map<uint64_t, uint64_t> strand_map_;
   AdapterImpl<VertexAdapter> adapter_impl_;
   AdapterImpl<SudoVertexAdapter> sudo_adapter_impl_;
-  rocksdb::DB* db_;
-  rocksdb::Options options_;
-  rocksdb::WriteOptions write_options_;
-  std::string db_path_;
+  // rocksdb::DB* db_;
+  // rocksdb::Options options_;
+  // rocksdb::WriteOptions write_options_;
+  // std::string db_path_;
 };
 
 class PackedRecord {

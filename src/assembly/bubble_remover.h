@@ -17,7 +17,11 @@ class BaseBubbleRemover {
                                           const UnitigGraph::VertexAdapter &)>;
 
  public:
-  BaseBubbleRemover &SetWriter(ContigWriter *bubble_file) {
+  // BaseBubbleRemover &SetWriter(ContigWriter *bubble_file) {
+  //   bubble_file_ = bubble_file;
+  //   return *this;
+  // }
+  BaseBubbleRemover &SetWriter(MPIContigWriter *bubble_file) {
     bubble_file_ = bubble_file;
     return *this;
   }
@@ -27,7 +31,8 @@ class BaseBubbleRemover {
   }
 
  private:
-  ContigWriter *bubble_file_{};
+  // ContigWriter *bubble_file_{};
+  MPIContigWriter *bubble_file_{};
   double careful_threshold_{1 + 1e-3};
 
  protected:
@@ -38,7 +43,7 @@ class BaseBubbleRemover {
                          const checker_type &checker, int rank);
   int SearchAndPopBubble(UnitigGraph &graph,
                          UnitigGraph::VertexAdapter &adapter, uint32_t max_len,
-                         const checker_type &checker, AtomicBitVector &to_delete);
+                         const checker_type &checker, kmlib::AtomicBitVector<uint8_t> &to_delete);
 };
 
 class NaiveBubbleRemover : public BaseBubbleRemover {

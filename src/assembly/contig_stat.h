@@ -18,9 +18,6 @@ inline ContigStat CalcAndPrintStat(UnitigGraph &graph, bool print = true,
   Histgram<uint64_t> hist;
 #pragma omp parallel for reduction(+ : n_looped, n_isolated)
   for (UnitigGraph::size_type i = 0; i < graph.size(); ++i) {
-    if (graph.is_del(i)) {
-      continue;
-    }
     
     auto adapter = graph.MakeVertexAdapter(i);
     if (changed_only && !adapter.IsChanged()) {

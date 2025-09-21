@@ -242,8 +242,8 @@ static bool ReadReadsAndProcessKernel(const IterOption &opt,
   options.max_background_jobs = opt.num_cpu_threads / 2; 
 
   // Write Buffer & Memtable 设置
-  options.write_buffer_size = 512 * 1024 * 1024; // 每个 memtable 256MB
-  options.max_write_buffer_number = 8;          // 最多 8 个 memtable
+  options.write_buffer_size = 1ULL * 1024ULL * 1024ULL * 1024ULL; // 每个 memtable 1GB
+  options.max_write_buffer_number = 16;          // 最多 16 个 memtable
   options.min_write_buffer_number_to_merge = 2; // 减少 flush 频率
 
   // Level-Compaction 优化
@@ -254,7 +254,7 @@ static bool ReadReadsAndProcessKernel(const IterOption &opt,
   options.compaction_options_universal.max_size_amplification_percent = 300;
 
   // 文件大小 & compaction 触发阈值
-  options.target_file_size_base = 512 * 1024 * 1024; // 每个 SST 文件更大，减少文件数量
+  options.target_file_size_base = 1024ULL * 1024ULL * 1024ULL; // 每个 SST 文件更大，减少文件数量
   options.level0_file_num_compaction_trigger = 8;    // L0 文件超过 8 就触发 compaction
   options.level0_slowdown_writes_trigger = 20;       // 超过 20 慢写
   options.level0_stop_writes_trigger = 40;           // 超过 40 停止写入，保护系统
@@ -266,12 +266,12 @@ static bool ReadReadsAndProcessKernel(const IterOption &opt,
   // I/O 优化
   options.use_direct_io_for_flush_and_compaction = true;
   options.use_direct_reads = true;
-  options.bytes_per_sync = 2 * 1024 * 1024;  // 每写 2MB 刷一次，平滑写入
+  options.bytes_per_sync = 16 * 1024 * 1024;  // 每写 2MB 刷一次，平滑写入
   options.wal_bytes_per_sync = 1 * 1024 * 1024;
 
   // Table Format & Cache
   rocksdb::BlockBasedTableOptions table_options;
-  table_options.block_cache = rocksdb::NewLRUCache(1024 * 1024 * 1024); // 缓存 256MB block
+  table_options.block_cache = rocksdb::NewLRUCache(1024ULL * 1024ULL * 1024ULL); // 缓存 1GB block
   table_options.cache_index_and_filter_blocks = true;
   table_options.pin_l0_filter_and_index_blocks_in_cache = true;
   table_options.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10, false)); // 可选

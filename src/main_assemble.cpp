@@ -292,7 +292,7 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
   // construct unitig graph
   timer.reset();
   timer.start();
-  UnitigGraph graph(&dbg, mpienv, opt);
+  UnitigGraph graph(&dbg, mpienv);
   timer.stop();
   xinfo("unitig graph size: {}, time for building: {.3}\n", graph.size(),
   timer.elapsed());
@@ -301,7 +301,8 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
   xinfo("sizeof(UnitigGraphVertex): {}\n", sizeof(UnitigGraphVertex));
 
   // set up bubble
-  ContigWriter bubble_writer(opt.bubble_file());
+  // ContigWriter bubble_writer(opt.bubble_file());
+  MPIContigWriter bubble_writer(opt.bubble_file(), mpienv.rank);
   NaiveBubbleRemover naiver_bubble_remover;
   ComplexBubbleRemover complex_bubble_remover;
   complex_bubble_remover.SetMergeSimilarity(opt.merge_similar)
@@ -429,7 +430,6 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
         num_removed, n_bubbles, timer.elapsed());
     CalcAndPrintStat(graph);
 
-
     //timer.reset();
     //timer.start();
     //MPI_Bcast(&vtx_size, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
@@ -458,9 +458,6 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
     //auto stat_changed = CalcAndPrintStat(graph, false, true);
   }
 
-  if (mpienv.rank == 0) {
-    graph.Destroy_db();
-  }
   MPI_Barrier(MPI_COMM_WORLD);
   
   vmrss_kb = getCurrentRSS_kb();
