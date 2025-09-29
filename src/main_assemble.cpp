@@ -301,8 +301,8 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
   xinfo("sizeof(UnitigGraphVertex): {}\n", sizeof(UnitigGraphVertex));
 
   // set up bubble
-  // ContigWriter bubble_writer(opt.bubble_file());
-  MPIContigWriter bubble_writer(opt.bubble_file(), mpienv.rank);
+  ContigWriter bubble_writer(opt.bubble_file());
+  // MPIContigWriter bubble_writer(opt.bubble_file(), mpienv.rank);
   NaiveBubbleRemover naiver_bubble_remover;
   ComplexBubbleRemover complex_bubble_remover;
   complex_bubble_remover.SetMergeSimilarity(opt.merge_similar)

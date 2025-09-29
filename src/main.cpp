@@ -864,6 +864,9 @@ void build_first_graph(Options& opt) {
                                                             , "--num_cpu_threads", std::to_string(opt.num_cpu_threads)
                                                             , "--read_lib_file", opt.read_lib_path()};
         //no mercy TODO
+        if (!opt.no_mercy)
+            args_1pass.push_back("--need_mercy");
+
         std::vector<const char*> argv_vec;
         for (const auto& arg : args_1pass) {
             argv_vec.push_back(arg.c_str());
@@ -932,6 +935,64 @@ void assemble(Options& opt, int cur_k) {
     }
 }
 
+void build_graph(Options& opt, int kmer_k, int kmer_from) {
+    std::vector<std::string> build_cmd = {"build"    , "--host_mem", std::to_string(opt.host_mem())
+                                                            , "--mem_flag", std::to_string(opt.mem_flag)
+                                                            , "--output_prefix", graph_prefix(opt.temp_dir, kmer_k)
+                                                            , "--num_cpu_threads", std::to_string(opt.num_cpu_threads)
+                                                            , "-k", std::to_string(kmer_k)
+                                                            , "--kmer_from", std::to_string(kmer_from)};
+    
+    size_t file_size = 0;
+
+    auto edges_file = graph_prefix(opt.temp_dir, kmer_k) + ".rank.0.edges.0";
+    if (fs::exists(edges_file)) {
+        build_cmd.push_back("--input_prefix");
+        build_cmd.push_back(graph_prefix(opt.temp_dir, kmer_k));
+
+        for (int rank = 0; rank < opt.num_processes; ++rank) {
+            for (int tid = 0; tid < opt.num_cpu_threads; ++tid) {
+                auto edge_file = graph_prefix(opt.temp_dir, kmer_k) + ".rank." + std::to_string(rank) +
+                                 ".edges." + std::to_string(tid);
+                if (fs::exists(edge_file)) {
+                    file_size += fs::file_size(edge_file);
+                }
+            }
+        }
+    }
+
+    auto addi_file = contig_prefix(opt.contig_dir(), kmer_from) + ".addi.fa";
+    if (fs::exists(addi_file)) {
+        build_cmd.push_back("--addi_contig");
+        build_cmd.push_back(addi_file);
+        file_size += fs::file_size(addi_file);
+    }
+
+    auto local_file = contig_prefix(opt.contig_dir(), kmer_from) + ".local.fa";
+    if (fs::exists(local_file)) {
+        build_cmd.push_back("--local_contig");
+        build_cmd.push_back(local_file);
+        file_size += fs::file_size(local_file);
+    }
+
+    auto contigs_file = contig_prefix(opt.contig_dir(), kmer_from) + ".contigs.fa";
+    if (fs::exists(contigs_file)) {
+        build_cmd.push_back("--contig");
+        build_cmd.push_back(contigs_file);
+        build_cmd.push_back("--bubble");
+        build_cmd.push_back(contig_prefix(opt.contig_dir(), kmer_from) + ".bubble_seq.fa");
+    }
+
+    if (!opt.no_mercy && kmer_k == opt.k_min) build_cmd.push_back("--need_mercy");
+    
+    std::vector<const char*> bld_args;
+    for (const auto& arg : build_cmd) {
+        bld_args.push_back(arg.c_str());
+    }
+
+    main_seq2sdbg(bld_args.size(), const_cast<char**>(bld_args.data()), opt.mpienv_);
+}
+
 void local_assemble(Options& opt, int cur_k, int kmer_to) {
 
     std::vector<std::string> args_la = {"local" , "-c", contig_prefix(opt.contig_dir(), cur_k) + ".contigs.fa"
@@ -993,7 +1054,7 @@ int main(int argc, char **argv) {
     int cur_k = opt.k_min;
     int next_k_idx = 0;
 
-    //while (cur_k < opt.k_max) {
+    while (cur_k < opt.k_max) {
         int next_k, k_step;
         next_k_idx += 1;
         next_k = opt.k_list[next_k_idx];
@@ -1004,8 +1065,13 @@ int main(int argc, char **argv) {
         }
         
         iterate(opt, cur_k, k_step);
-        MPI_Barrier(MPI_COMM_WORLD); // Barrier
-    //}
+        MPI_Barrier(MPI_COMM_WORLD);
+        build_graph(opt, next_k, cur_k);
+        MPI_Barrier(MPI_COMM_WORLD);
+        assemble(opt, next_k);
+        cur_k = next_k;
+        MPI_Barrier(MPI_COMM_WORLD);
+    }
     
     opt.mpienv_.finalize();
     return 0;

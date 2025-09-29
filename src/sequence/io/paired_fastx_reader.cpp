@@ -14,10 +14,10 @@ int64_t PairedFastxReader::Read(SeqPackage *pkg, int64_t max_num,
       int b0 = 0, e0 = r0->seq.l;
       int b1 = 0, e1 = r1->seq.l;
 
-      if (trim_qc_) {
-        FastxReader::TrimQC(r0->qual.s, r0->qual.l, &e0);
-        FastxReader::TrimQC(r1->qual.s, r1->qual.l, &e1);
-      }
+      // if (trim_qc_) {
+      //   FastxReader::TrimQC(r0->qual.s, r0->qual.l, &e0);
+      //   FastxReader::TrimQC(r1->qual.s, r1->qual.l, &e1);
+      // }
 
       if (trim_n_) {
         FastxReader::TrimN(r0->seq.s, e0, &b0, &e0);

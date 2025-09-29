@@ -221,44 +221,33 @@ size_t BaseBubbleRemover::PopBubbles(UnitigGraph &graph, bool permanent_rm,
                                      uint32_t max_len,
                                      const checker_type &checker, MPIEnviroment &mpienv) {
   uint32_t num_removed = 0;
-  uint32_t num_rm = 0;
-  kmlib::AtomicBitVector<uint8_t> to_delete(graph.size());
+
 #pragma omp parallel for reduction(+ : num_removed)
-  for (UnitigGraph::size_type i = mpienv.rank; i < graph.size(); i += mpienv.nprocs) {
-  // for (UnitigGraph::size_type i = 0; i < graph.size(); ++i) {
+  for (UnitigGraph::size_type i = 0; i < graph.size(); ++i) {
     UnitigGraph::VertexAdapter adapter = graph.MakeVertexAdapter(i);
     if (adapter.IsStandalone()) {
       continue;
     }
-    // xinfo("test:{}\n", i);
     for (int strand = 0; strand < 2; ++strand, adapter.ReverseComplement()) {
-      num_removed += SearchAndPopBubble(graph, adapter, max_len, checker, to_delete);
-      // num_removed += SearchAndPopBubble(graph, adapter, max_len, checker, mpienv.rank);
+      // num_removed += SearchAndPopBubble(graph, adapter, max_len, checker, to_delete);
+      num_removed += SearchAndPopBubble(graph, adapter, max_len, checker, mpienv.rank);
     }
-    // 仅主线程检查并刷新 buffer
-    if (bubble_file_ != nullptr && omp_get_thread_num() == 0 && bubble_file_->check_buf()) {
-      bubble_file_->MPIFileWrite();
-    }
-  }
-  if (bubble_file_ != nullptr) {
-    bubble_file_->MPIFileWrite();
-    bubble_file_->allreduce();
   }
 
-  //MPI_Allreduce(MPI_IN_PLACE, &num_removed, 1, MPI_UINT32_T, MPI_SUM, MPI_COMM_WORLD);
-  MPI_Allreduce(MPI_IN_PLACE, to_delete.data_array_.data(), to_delete.data_array_.size(), MPI_UINT8_T, MPI_BOR, MPI_COMM_WORLD);
+  // MPI_Allreduce(MPI_IN_PLACE, &num_removed, 1, MPI_UINT32_T, MPI_SUM, MPI_COMM_WORLD);
+  // MPI_Allreduce(MPI_IN_PLACE, to_delete.data_array_.data(), to_delete.data_array_.size(), MPI_UINT8_T, MPI_BOR, MPI_COMM_WORLD);
 
-#pragma omp parallel for
-  for (UnitigGraph::size_type i = 0; i < graph.size(); ++i) {
-    if (to_delete.at(i)) {
-      auto adapter = graph.MakeVertexAdapter(i);
-      adapter.SetToDelete();
-      num_rm++;
-    }
-  }
+// #pragma omp parallel for reduction(+ : num_rm)
+//   for (UnitigGraph::size_type i = 0; i < graph.size(); ++i) {
+//     if (to_delete.at(i)) {
+//       auto adapter = graph.MakeVertexAdapter(i);
+//       adapter.SetToDelete();
+//       num_rm++;
+//     }
+//   }
   graph.Refresh(!permanent_rm);
-  // return num_removed;
-  return num_rm;
+  return num_removed;
+  // return num_rm;
 }
 
 size_t ComplexBubbleRemover::PopBubbles(UnitigGraph &graph, bool permanent_rm, MPIEnviroment &mpienv) {

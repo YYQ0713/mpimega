@@ -17,22 +17,22 @@ class BaseBubbleRemover {
                                           const UnitigGraph::VertexAdapter &)>;
 
  public:
-  // BaseBubbleRemover &SetWriter(ContigWriter *bubble_file) {
-  //   bubble_file_ = bubble_file;
-  //   return *this;
-  // }
-  BaseBubbleRemover &SetWriter(MPIContigWriter *bubble_file) {
+  BaseBubbleRemover &SetWriter(ContigWriter *bubble_file) {
     bubble_file_ = bubble_file;
     return *this;
   }
+  // BaseBubbleRemover &SetWriter(MPIContigWriter *bubble_file) {
+  //   bubble_file_ = bubble_file;
+  //   return *this;
+  // }
   BaseBubbleRemover &SetCarefulThreshold(double threshold) {
     careful_threshold_ = threshold;
     return *this;
   }
 
  private:
-  // ContigWriter *bubble_file_{};
-  MPIContigWriter *bubble_file_{};
+  ContigWriter *bubble_file_{};
+  // MPIContigWriter *bubble_file_{};
   double careful_threshold_{1 + 1e-3};
 
  protected:

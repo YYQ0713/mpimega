@@ -232,7 +232,7 @@ static bool ReadReadsAndProcessKernel(const IterOption &opt,
   int64_t num_aligned_reads = 0;
   int64_t num_total_reads = 0;
   int64_t num_iterative_edges = 0;
-  MPIEdgeWriter<KmerType> mpi_edgewiriter(opt.kmer_k, opt.output_prefix, mpienv);
+  MPIEdgeWriter<KmerType> mpi_edgewiriter(opt.kmer_k + opt.step + 1, opt.output_prefix, mpienv);
 
   rocksdb::DB* db;
   rocksdb::Options options;
@@ -274,7 +274,7 @@ static bool ReadReadsAndProcessKernel(const IterOption &opt,
   table_options.block_cache = rocksdb::NewLRUCache(1024ULL * 1024ULL * 1024ULL); // 缓存 1GB block
   table_options.cache_index_and_filter_blocks = true;
   table_options.pin_l0_filter_and_index_blocks_in_cache = true;
-  table_options.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10, false)); // 可选
+  //table_options.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10, false)); // 可选
   options.table_factory.reset(NewBlockBasedTableFactory(table_options));
 
   // WriteOptions (批量写入场景可以关 WAL)
@@ -290,14 +290,14 @@ static bool ReadReadsAndProcessKernel(const IterOption &opt,
       return 1;
   }
 
-  //Bloom bloom(1000000000, 0.000001);
+  Bloom bloom(10000000000, 0.1);
 
   while (true) {
     const auto &read_pkg = reader.Next();
     if (read_pkg.seq_count() == 0) {
       break;
     }
-    num_aligned_reads += index.FindNextKmersFromReads(read_pkg, &collector, mpienv.rank, mpienv.nprocs, &mpi_edgewiriter, &num_iterative_edges, db);
+    num_aligned_reads += index.FindNextKmersFromReads(read_pkg, &collector, mpienv.rank, mpienv.nprocs, &mpi_edgewiriter, &num_iterative_edges, &bloom, db);
     num_total_reads += read_pkg.seq_count();
     // xinfo("Processed: {}, aligned: {}. Iterative edges: {}\n", num_total_reads,
     //        num_aligned_reads, num_iterative_edges);

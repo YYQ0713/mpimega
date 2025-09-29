@@ -89,27 +89,16 @@ class ContigFlankIndex {
 
   template <class CollectorType, class WriterType>
   size_t FindNextKmersFromReads(const SeqPackage &seq_pkg,
-                                CollectorType *out, int rank, int nprocs, WriterType *mpiwiriter, int64_t *num_edges, rocksdb::DB* db) const {
+                                CollectorType *out, int rank, int nprocs, WriterType *mpiwiriter, int64_t *num_edges, Bloom *blf, rocksdb::DB* db) const {
     std::vector<bool> kmer_exist;
     std::vector<float> kmer_mul;
     size_t num_aligned_reads = 0;
     size_t num_iter_edges = 0;
 
     KmerHash hasher;
-    // rocksdb::DB* db;
-    // rocksdb::Options options;
+
     rocksdb::ReadOptions read_options;
     rocksdb::WriteOptions write_options;
-    // options.create_if_missing = true;
-    // options.IncreaseParallelism();
-    // options.OptimizeLevelStyleCompaction();
-
-    // std::string db_path = mpiwiriter->RetFilePrefix() + ".rank." + std::to_string(rank);
-    // rocksdb::Status status = rocksdb::DB::Open(options, db_path, &db);
-    // if (!status.ok()) {
-    //     std::cerr << "Unable to open database: " << status.ToString() << std::endl;
-    //     return 1;
-    // }
 
   #pragma omp parallel
   {
@@ -240,14 +229,19 @@ class ContigFlankIndex {
             // out->Insert(final_kmer,
             //             static_cast<mul_t>(
             //                 std::min(kMaxMul, static_cast<int>(mul + 0.5))));
-
-            
-            rocksdb::Slice key_slice(reinterpret_cast<const char*>(final_kmer.data()), sizeof(final_kmer));
             mul_t value_to_write = std::min(kMaxMul, static_cast<int>(mul + 0.5));
-            rocksdb::Slice value_slice(reinterpret_cast<const char*>(&value_to_write), sizeof(mul_t));
-
-            //rocksdb::Status write_status = db->Put(write_options, key_slice, value_slice);
-            thread_batch.Put(key_slice, value_slice);
+            if (!blf->bloom_check_add(final_kmer)) {
+              mpiwiriter->WriteToBuf(final_kmer, value_to_write);
+              num_iter_edges++;
+            } else {
+              rocksdb::Slice key_slice(reinterpret_cast<const char*>(final_kmer.data()), sizeof(final_kmer));
+              //mul_t value_to_write = std::min(kMaxMul, static_cast<int>(mul + 0.5));
+              rocksdb::Slice value_slice(reinterpret_cast<const char*>(&value_to_write), sizeof(mul_t));
+  
+              //rocksdb::Status write_status = db->Put(write_options, key_slice, value_slice);
+              thread_batch.Put(key_slice, value_slice);
+            }
+            
 
             // 检查批次大小，如果达到阈值则写入
             if (thread_batch.Count() > 4194304) { // 例如，4M次操作
@@ -257,21 +251,6 @@ class ContigFlankIndex {
                 // 提交后清空，准备新的批次
                 thread_batch.Clear();
             }
-            // std::string existing;
-            // rocksdb::Status get_statu;
-
-            // {
-            //   std::lock_guard<std::mutex> guard(lock);
-            //   get_statu = db->Get(read_options, key_slice, &existing);
-            //   if (get_statu.IsNotFound()) {
-            //       rocksdb::Status write_status = db->Put(write_options, key_slice, value_slice);
-            //   }
-            // }
-
-            // if (get_statu.IsNotFound()) {
-            //     mpiwiriter->WriteToBuf(final_kmer, value_to_write);
-            //     num_iter_edges++;
-            // }
 
             // if (!blf->bloom_check_add(final_kmer)) {
             //   mpiwiriter->WriteToBuf(final_kmer, static_cast<mul_t>(std::min(kMaxMul, static_cast<int>(mul + 0.5))));
@@ -284,16 +263,9 @@ class ContigFlankIndex {
       num_aligned_reads += success;
 
       //仅主线程检查并刷新 buffer
-      // if (omp_get_thread_num() == 0 && mpiwiriter->check_buf()) {
-      //   mpiwiriter->MPIFileWrite();
-      // }
-
-      // #pragma omp master
-      // {
-      //     if (mpiwiriter->check_buf()) {
-      //         mpiwiriter->MPIFileWrite();
-      //     }
-      // }
+      if (omp_get_thread_num() == 0 && mpiwiriter->check_buf()) {
+        mpiwiriter->MPIFileWrite();
+      }
     }
 
     // 每个线程检查自己的批次是否为空，然后提交

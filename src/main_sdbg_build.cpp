@@ -123,9 +123,101 @@ int main_seq2sdbg(int argc, char **argv, MPIEnviroment &mpienv) {
                  "other: use all "
                  "available mem specified by '--host_mem'");
 
-  try {
-    desc.Parse(argc, argv);
+  // try {
+  //   desc.Parse(argc, argv);
 
+  //   if (opt.input_prefix.empty() && opt.contig.empty() &&
+  //       opt.addi_contig.empty()) {
+  //     throw std::logic_error("No input files!");
+  //   }
+
+  //   if (opt.n_threads == 0) {
+  //     opt.n_threads = omp_get_max_threads();
+  //   }
+
+  //   if (opt.k < 9) {
+  //     throw std::logic_error("kmer size must be >= 9!");
+  //   }
+
+  //   if (opt.host_mem == 0) {
+  //     throw std::logic_error("Please specify the host memory!");
+  //   }
+  // } catch (std::exception &e) {
+  //   std::cerr << e.what() << std::endl;
+  //   std::cerr << "Usage: sdbg_builder seq2sdbg -k kmer_size --contig "
+  //                "contigs.fa [--addi_contig "
+  //                "add.fa] [--input_prefix input] -o out"
+  //             << std::endl;
+  //   std::cerr << "Options:" << std::endl;
+  //   std::cerr << desc << std::endl;
+  //   exit(1);
+  // }
+
+  for (int i = 1; i < argc; ++i) {
+    std::string option = argv[i];
+    if (option == "--host_mem") {
+      if (i + 1 <= argc) {
+        opt.host_mem = std::stod(argv[++i]);
+      }
+    }
+    else if (option == "-k" || option == "--kmer_size") {
+      if (i + 1 <= argc) {
+        opt.k = std::stoi(argv[++i]);
+      }
+    }
+    else if (option == "--kmer_from") {
+      if (i + 1 <= argc) {
+        opt.k_from = std::stoi(argv[++i]);
+      }
+    }
+    else if (option == "--num_cpu_threads" || option == "-t") {
+      if (i + 1 <= argc) {
+        opt.n_threads = std::stoi(argv[++i]);
+      }
+    }
+    else if (option == "--contig") {
+      if (i + 1 <= argc) {
+        opt.contig = argv[++i];
+      }
+    }
+    else if (option == "--bubble") {
+      if (i + 1 <= argc) {
+        opt.bubble_seq = argv[++i];
+      }
+    }
+    else if (option == "--addi_contig") {
+      if (i + 1 <= argc) {
+        opt.addi_contig = argv[++i];
+      }
+    }
+    else if (option == "--local_contig") {
+      if (i + 1 <= argc) {
+        opt.local_contig = argv[++i];
+      }
+    }
+    else if (option == "--input_prefix") {
+      if (i + 1 <= argc) {
+        opt.input_prefix = argv[++i];
+      }
+    }
+    else if (option == "--output_prefix" || option == "-o") {
+      if (i + 1 <= argc) {
+        opt.output_prefix = argv[++i];
+      }
+    }
+    else if (option == "--need_mercy") {
+      if (i + 1 <= argc) {
+        opt.need_mercy = std::stoi(argv[++i]);
+      }
+    }
+    else if (option == "--mem_flag") {
+      if (i + 1 <= argc) {
+        opt.mem_flag = std::stoi(argv[++i]);
+      }
+    }
+  }
+
+  try {
     if (opt.input_prefix.empty() && opt.contig.empty() &&
         opt.addi_contig.empty()) {
       throw std::logic_error("No input files!");
