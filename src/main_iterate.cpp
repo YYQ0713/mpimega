@@ -234,61 +234,61 @@ static bool ReadReadsAndProcessKernel(const IterOption &opt,
   int64_t num_iterative_edges = 0;
   MPIEdgeWriter<KmerType> mpi_edgewiriter(opt.kmer_k + opt.step + 1, opt.output_prefix, mpienv);
 
-  rocksdb::DB* db;
-  rocksdb::Options options;
-  options.create_if_missing = true;
+  // rocksdb::DB* db;
+  // rocksdb::Options options;
+  // options.create_if_missing = true;
 
-  options.IncreaseParallelism(opt.num_cpu_threads / 2);
-  options.max_background_jobs = opt.num_cpu_threads / 2; 
+  // options.IncreaseParallelism(opt.num_cpu_threads / 2);
+  // options.max_background_jobs = opt.num_cpu_threads / 2; 
 
   // Write Buffer & Memtable 设置
-  options.write_buffer_size = 1ULL * 1024ULL * 1024ULL * 1024ULL; // 每个 memtable 1GB
-  options.max_write_buffer_number = 16;          // 最多 16 个 memtable
-  options.min_write_buffer_number_to_merge = 2; // 减少 flush 频率
+  // options.write_buffer_size = 1ULL * 1024ULL * 1024ULL * 1024ULL; // 每个 memtable 1GB
+  // options.max_write_buffer_number = 16;          // 最多 16 个 memtable
+  // options.min_write_buffer_number_to_merge = 2; // 减少 flush 频率
 
   // Level-Compaction 优化
-  options.OptimizeUniversalStyleCompaction();   // Universal compaction 更适合写多
-  options.compaction_style = rocksdb::kCompactionStyleUniversal;
-  options.compaction_options_universal.size_ratio = 20;
-  options.compaction_options_universal.min_merge_width = 2;
-  options.compaction_options_universal.max_size_amplification_percent = 300;
+  // options.OptimizeUniversalStyleCompaction();   // Universal compaction 更适合写多
+  // options.compaction_style = rocksdb::kCompactionStyleUniversal;
+  // options.compaction_options_universal.size_ratio = 20;
+  // options.compaction_options_universal.min_merge_width = 2;
+  // options.compaction_options_universal.max_size_amplification_percent = 300;
 
   // 文件大小 & compaction 触发阈值
-  options.target_file_size_base = 1024ULL * 1024ULL * 1024ULL; // 每个 SST 文件更大，减少文件数量
-  options.level0_file_num_compaction_trigger = 8;    // L0 文件超过 8 就触发 compaction
-  options.level0_slowdown_writes_trigger = 20;       // 超过 20 慢写
-  options.level0_stop_writes_trigger = 40;           // 超过 40 停止写入，保护系统
+  // options.target_file_size_base = 1024ULL * 1024ULL * 1024ULL; // 每个 SST 文件更大，减少文件数量
+  // options.level0_file_num_compaction_trigger = 8;    // L0 文件超过 8 就触发 compaction
+  // options.level0_slowdown_writes_trigger = 20;       // 超过 20 慢写
+  // options.level0_stop_writes_trigger = 40;           // 超过 40 停止写入，保护系统
 
   // 压缩算法选择
-  options.compression = rocksdb::kNoCompression;     // 写入密集，直接不压缩
-  options.bottommost_compression = rocksdb::kLZ4Compression; // 只有最后一层压缩，节省空间
+  // options.compression = rocksdb::kNoCompression;     // 写入密集，直接不压缩
+  // options.bottommost_compression = rocksdb::kLZ4Compression; // 只有最后一层压缩，节省空间
 
   // I/O 优化
-  options.use_direct_io_for_flush_and_compaction = true;
-  options.use_direct_reads = true;
-  options.bytes_per_sync = 16 * 1024 * 1024;  // 每写 2MB 刷一次，平滑写入
-  options.wal_bytes_per_sync = 1 * 1024 * 1024;
+  // options.use_direct_io_for_flush_and_compaction = true;
+  // options.use_direct_reads = true;
+  // options.bytes_per_sync = 16 * 1024 * 1024;  // 每写 2MB 刷一次，平滑写入
+  // options.wal_bytes_per_sync = 1 * 1024 * 1024;
 
   // Table Format & Cache
-  rocksdb::BlockBasedTableOptions table_options;
-  table_options.block_cache = rocksdb::NewLRUCache(1024ULL * 1024ULL * 1024ULL); // 缓存 1GB block
-  table_options.cache_index_and_filter_blocks = true;
-  table_options.pin_l0_filter_and_index_blocks_in_cache = true;
-  //table_options.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10, false)); // 可选
-  options.table_factory.reset(NewBlockBasedTableFactory(table_options));
+  // rocksdb::BlockBasedTableOptions table_options;
+  // table_options.block_cache = rocksdb::NewLRUCache(1024ULL * 1024ULL * 1024ULL); // 缓存 1GB block
+  // table_options.cache_index_and_filter_blocks = true;
+  // table_options.pin_l0_filter_and_index_blocks_in_cache = true;
+  // //table_options.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10, false)); // 可选
+  // options.table_factory.reset(NewBlockBasedTableFactory(table_options));
 
   // WriteOptions (批量写入场景可以关 WAL)
-  rocksdb::WriteOptions write_options;
-  write_options.disableWAL = true; 
-  write_options.sync = false;      // 不强制同步 WAL
+  // rocksdb::WriteOptions write_options;
+  // write_options.disableWAL = true; 
+  // write_options.sync = false;      // 不强制同步 WAL
   // options.OptimizeLevelStyleCompaction();
 
-  std::string db_path = mpi_edgewiriter.RetFilePrefix() + ".rank." + std::to_string(mpienv.rank);
-  rocksdb::Status status = rocksdb::DB::Open(options, db_path, &db);
-  if (!status.ok()) {
-      std::cerr << "Unable to open database: " << status.ToString() << std::endl;
-      return 1;
-  }
+  // std::string db_path = mpi_edgewiriter.RetFilePrefix() + ".rank." + std::to_string(mpienv.rank);
+  // rocksdb::Status status = rocksdb::DB::Open(options, db_path, &db);
+  // if (!status.ok()) {
+  //     std::cerr << "Unable to open database: " << status.ToString() << std::endl;
+  //     return 1;
+  // }
 
   Bloom bloom(10000000000, 0.1);
 
@@ -297,38 +297,39 @@ static bool ReadReadsAndProcessKernel(const IterOption &opt,
     if (read_pkg.seq_count() == 0) {
       break;
     }
-    num_aligned_reads += index.FindNextKmersFromReads(read_pkg, &collector, mpienv.rank, mpienv.nprocs, &mpi_edgewiriter, &num_iterative_edges, &bloom, db);
+    num_aligned_reads += index.FindNextKmersFromReads(read_pkg, &collector, mpienv.rank, mpienv.nprocs, &mpi_edgewiriter, &num_iterative_edges, &bloom);
     num_total_reads += read_pkg.seq_count();
-    // xinfo("Processed: {}, aligned: {}. Iterative edges: {}\n", num_total_reads,
-    //        num_aligned_reads, num_iterative_edges);
-    xinfo("Processed: {}, aligned: {}.\n", num_total_reads, num_aligned_reads);
+    xinfo("Processed: {}, aligned: {}. Iterative edges: {}\n", num_total_reads,
+           num_aligned_reads, num_iterative_edges);
+    //xinfo("Processed: {}, aligned: {}.\n", num_total_reads, num_aligned_reads);
   }
   
   
-  xinfo("finish db construct and start writing file\n");
-  rocksdb::Iterator* it = db->NewIterator(rocksdb::ReadOptions());
-  for (it->SeekToFirst(); it->Valid(); it->Next()) {
-    KmerType tmp_kmer(it->key().data());
-    mul_t mul = *reinterpret_cast<const mul_t*>(it->value().data());
-    mpi_edgewiriter.WriteToBuf(tmp_kmer, mul);
-    num_iterative_edges++;
-    if (mpi_edgewiriter.check_buf()) {
-      mpi_edgewiriter.MPIFileWrite();
-    }
-  }
+  // xinfo("finish db construct and start writing file\n");
+  // rocksdb::Iterator* it = db->NewIterator(rocksdb::ReadOptions());
+  // for (it->SeekToFirst(); it->Valid(); it->Next()) {
+  //   KmerType tmp_kmer(it->key().data());
+  //   mul_t mul = *reinterpret_cast<const mul_t*>(it->value().data());
+  //   mpi_edgewiriter.WriteToBuf(tmp_kmer, mul);
+  //   num_iterative_edges++;
+  //   if (mpi_edgewiriter.check_buf()) {
+  //     mpi_edgewiriter.MPIFileWrite();
+  //   }
+  // }
+  collector.FlushToFile(mpi_edgewiriter, num_iterative_edges);
   xinfo("Total: {}, aligned: {}. Iterative edges: {}\n", num_total_reads, num_aligned_reads, num_iterative_edges);
   //collector.FlushToFile();
   mpi_edgewiriter.MPIFileWrite();
   mpi_edgewiriter.allreduce();
   mpi_edgewiriter.Finalize(mpienv);
 
-  delete db;
+  // delete db;
 
-  rocksdb::Options cleanup_options;
-  status = rocksdb::DestroyDB(db_path, cleanup_options);
-  if (!status.ok()) {
-      std::cerr << "Failed to clean up database: " << status.ToString() << std::endl;
-  }
+  // rocksdb::Options cleanup_options;
+  // status = rocksdb::DestroyDB(db_path, cleanup_options);
+  // if (!status.ok()) {
+  //     std::cerr << "Failed to clean up database: " << status.ToString() << std::endl;
+  // }
   
   return true;
 }

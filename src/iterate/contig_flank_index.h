@@ -89,7 +89,7 @@ class ContigFlankIndex {
 
   template <class CollectorType, class WriterType>
   size_t FindNextKmersFromReads(const SeqPackage &seq_pkg,
-                                CollectorType *out, int rank, int nprocs, WriterType *mpiwiriter, int64_t *num_edges, Bloom *blf, rocksdb::DB* db) const {
+                                CollectorType *out, int rank, int nprocs, WriterType *mpiwiriter, int64_t *num_edges, Bloom *blf) const {
     std::vector<bool> kmer_exist;
     std::vector<float> kmer_mul;
     size_t num_aligned_reads = 0;
@@ -97,12 +97,9 @@ class ContigFlankIndex {
 
     KmerHash hasher;
 
-    rocksdb::ReadOptions read_options;
-    rocksdb::WriteOptions write_options;
-
   #pragma omp parallel
   {
-    rocksdb::WriteBatch thread_batch;
+    //rocksdb::WriteBatch thread_batch;
 
     #pragma omp for reduction(+ : num_aligned_reads, num_iter_edges) private(kmer_exist, kmer_mul)
     for (unsigned seq_id = 0; seq_id < seq_pkg.seq_count(); ++seq_id) {
@@ -234,23 +231,24 @@ class ContigFlankIndex {
               mpiwiriter->WriteToBuf(final_kmer, value_to_write);
               num_iter_edges++;
             } else {
-              rocksdb::Slice key_slice(reinterpret_cast<const char*>(final_kmer.data()), sizeof(final_kmer));
+              // rocksdb::Slice key_slice(reinterpret_cast<const char*>(final_kmer.data()), sizeof(final_kmer));
               //mul_t value_to_write = std::min(kMaxMul, static_cast<int>(mul + 0.5));
-              rocksdb::Slice value_slice(reinterpret_cast<const char*>(&value_to_write), sizeof(mul_t));
+              // rocksdb::Slice value_slice(reinterpret_cast<const char*>(&value_to_write), sizeof(mul_t));
   
               //rocksdb::Status write_status = db->Put(write_options, key_slice, value_slice);
-              thread_batch.Put(key_slice, value_slice);
+              // thread_batch.Put(key_slice, value_slice);
+              out->Insert(final_kmer);
             }
             
 
             // 检查批次大小，如果达到阈值则写入
-            if (thread_batch.Count() > 4194304) { // 例如，4M次操作
-                // 提交线程的批次
-                rocksdb::Status write_status = db->Write(write_options, &thread_batch);
+            // if (thread_batch.Count() > 4194304) { // 例如，4M次操作
+            //     // 提交线程的批次
+            //     rocksdb::Status write_status = db->Write(write_options, &thread_batch);
                 
-                // 提交后清空，准备新的批次
-                thread_batch.Clear();
-            }
+            //     // 提交后清空，准备新的批次
+            //     thread_batch.Clear();
+            // }
 
             // if (!blf->bloom_check_add(final_kmer)) {
             //   mpiwiriter->WriteToBuf(final_kmer, static_cast<mul_t>(std::min(kMaxMul, static_cast<int>(mul + 0.5))));
@@ -269,10 +267,10 @@ class ContigFlankIndex {
     }
 
     // 每个线程检查自己的批次是否为空，然后提交
-    if (thread_batch.Count() != 0) {
-        db->Write(write_options, &thread_batch);
-        thread_batch.Clear();
-    }
+    // if (thread_batch.Count() != 0) {
+    //     db->Write(write_options, &thread_batch);
+    //     thread_batch.Clear();
+    // }
   }//#pragma omp parallel
 
     // xinfo("finish db construct and start writing file\n");
