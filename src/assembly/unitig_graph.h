@@ -12,11 +12,6 @@
 #include "sdbg/sdbg.h"
 #include "unitig_graph_vertex.h"
 #include <algorithm>
-#include <rocksdb/db.h>
-#include <rocksdb/iterator.h>
-#include <rocksdb/options.h>
-#include <rocksdb/table.h>
-#include <rocksdb/filter_policy.h>
 
 class AsmOptions {
   public:

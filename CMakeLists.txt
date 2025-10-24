@@ -12,12 +12,12 @@ add_subdirectory(thirdparty/fmt-11.2.0)
 
 # 设置 RocksDB 的构建选项。
 # 这些选项必须在 add_subdirectory() 之前设置。
-set(ROCKSDB_BUILD_SHARED OFF CACHE BOOL "Build RocksDB static library" FORCE)
-set(WITH_GFLAGS OFF CACHE BOOL "Disable gflags dependency" FORCE)
+#set(ROCKSDB_BUILD_SHARED OFF CACHE BOOL "Build RocksDB static library" FORCE)
+#set(WITH_GFLAGS OFF CACHE BOOL "Disable gflags dependency" FORCE)
 
 # 添加 RocksDB 子目录
 # 这里不带任何额外参数
-add_subdirectory(thirdparty/rocksdb-9.7.4)
+#add_subdirectory(thirdparty/rocksdb-9.7.4)
 
 #set(TBB_TEST OFF CACHE BOOL "Disable TBB tests")
 #set(TBB_EXAMPLES OFF CACHE BOOL "Disable TBB examples")
@@ -49,6 +49,7 @@ FILE(GLOB_RECURSE SEQ_SOURCE "src/sequence/*.cpp")
 FILE(GLOB_RECURSE MPI_SOURCE "src/mpienv/*.cpp")
 FILE(GLOB_RECURSE LCASM_SOURCE "src/localasm/*.cpp")
 FILE(GLOB_RECURSE IDBA_SOURCE "src/idba/*.cpp")
+FILE(GLOB_RECURSE TOOLKIT_SOURCE "src/tools/*.cpp")
 
 LIST(APPEND OTHER_SOURCE
 		src/main.cpp
@@ -96,9 +97,9 @@ endif (TSAN)
 
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}: ${CMAKE_CXX_FLAGS}")
 
-add_executable(mpimeta_core ${OTHER_SOURCE} ${SDBG_SOURCE} ${SEQ_SOURCE} ${CX1_SOURCE} ${MPI_SOURCE} ${ASMBL_SOURCE} ${LCASM_SOURCE} ${IDBA_SOURCE})
-add_executable(mpimeta_core_popcnt ${OTHER_SOURCE} ${SDBG_SOURCE} ${SEQ_SOURCE} ${CX1_SOURCE} ${MPI_SOURCE} ${ASMBL_SOURCE} ${LCASM_SOURCE} ${IDBA_SOURCE})
-add_executable(mpimeta_core_no_hw_accel ${OTHER_SOURCE} ${SDBG_SOURCE} ${SEQ_SOURCE} ${CX1_SOURCE} ${MPI_SOURCE} ${ASMBL_SOURCE} ${LCASM_SOURCE} ${IDBA_SOURCE})
+add_executable(mpimeta_core ${OTHER_SOURCE} ${SDBG_SOURCE} ${SEQ_SOURCE} ${CX1_SOURCE} ${MPI_SOURCE} ${ASMBL_SOURCE} ${LCASM_SOURCE} ${IDBA_SOURCE} ${TOOLKIT_SOURCE})
+add_executable(mpimeta_core_popcnt ${OTHER_SOURCE} ${SDBG_SOURCE} ${SEQ_SOURCE} ${CX1_SOURCE} ${MPI_SOURCE} ${ASMBL_SOURCE} ${LCASM_SOURCE} ${IDBA_SOURCE} ${TOOLKIT_SOURCE})
+add_executable(mpimeta_core_no_hw_accel ${OTHER_SOURCE} ${SDBG_SOURCE} ${SEQ_SOURCE} ${CX1_SOURCE} ${MPI_SOURCE} ${ASMBL_SOURCE} ${LCASM_SOURCE} ${IDBA_SOURCE} ${TOOLKIT_SOURCE})
 
 set_target_properties(mpimeta_core PROPERTIES COMPILE_FLAGS "-mbmi2 -DUSE_BMI2 -mpopcnt")
 set_target_properties(mpimeta_core_popcnt PROPERTIES COMPILE_FLAGS "-mpopcnt")
@@ -113,24 +114,21 @@ target_link_libraries(mpimeta_core
 		m
 		armci
 		comex
-		fmt::fmt
-		rocksdb)
+		fmt::fmt)
 target_link_libraries(mpimeta_core_popcnt 
 		ga
 		ga++
 		m
 		armci
 		comex
-		fmt::fmt
-		rocksdb)
+		fmt::fmt)
 target_link_libraries(mpimeta_core_no_hw_accel 
 		ga
 		ga++
 		armci
 		m
 		comex
-		fmt::fmt
-		rocksdb)
+		fmt::fmt)
 
 #target_include_directories(mpimeta_core PRIVATE thirdparty/zlib-ng-2.2.4)
 #target_include_directories(mpimeta_core_popcnt PRIVATE thirdparty/zlib-ng-2.2.4)
@@ -138,9 +136,9 @@ target_link_libraries(mpimeta_core_no_hw_accel
 #target_include_directories(mpimeta_core PRIVATE thirdparty/oneTBB-2022.2.0/include)
 #target_include_directories(mpimeta_core_popcnt PRIVATE thirdparty/oneTBB-2022.2.0/include)
 #target_include_directories(mpimeta_core_no_hw_accel PRIVATE thirdparty/oneTBB-2022.2.0/include)
-add_custom_target(
-        mpimeta ALL
-        COMMAND cp ${CMAKE_SOURCE_DIR}/src/mpimeta .
-)
+#add_custom_target(
+#        mpimeta ALL
+#        COMMAND cp ${CMAKE_SOURCE_DIR}/src/mpimeta .
+#)
 
-add_dependencies(mpimeta mpimeta_core mpimeta_core_popcnt mpimeta_core_no_hw_accel)
+#add_dependencies(mpimeta mpimeta_core mpimeta_core_popcnt mpimeta_core_no_hw_accel)

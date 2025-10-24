@@ -15,9 +15,6 @@
 #include "sparsepp/spp.h"
 #include "libbloom/bloom.h"
 #include "sequence/io/edge/edge_writer.h"
-#include <rocksdb/db.h>
-#include <rocksdb/iterator.h>
-#include <rocksdb/write_batch.h>
 
 template <class KmerType>
 class ContigFlankIndex {

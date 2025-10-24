@@ -38,11 +38,6 @@
 #include "sequence/io/async_sequence_reader.h"
 #include "utils/options_description.h"
 #include "libbloom/bloom.h"
-#include <rocksdb/db.h>
-#include <rocksdb/iterator.h>
-#include <rocksdb/options.h>
-#include <rocksdb/table.h>
-#include <rocksdb/filter_policy.h>
 
 using std::string;
 using std::vector;
@@ -330,7 +325,8 @@ static bool ReadReadsAndProcessKernel(const IterOption &opt,
   // if (!status.ok()) {
   //     std::cerr << "Failed to clean up database: " << status.ToString() << std::endl;
   // }
-  
+  size_t vmrss_kb = getCurrentRSS_kb();
+  xinfo("End of iter currentRSS: {} KB\n", vmrss_kb);
   return true;
 }
 
@@ -384,8 +380,6 @@ struct Runner : public BaseRunner {
     ReadContigsAndBuildIndex(opt, opt.contig_file, &index, mpienv);
     ReadContigsAndBuildIndex(opt, opt.bubble_file, &index, mpienv);
     ReadReadsAndProcess(opt, index, mpienv);
-    size_t vmrss_kb = getCurrentRSS_kb();
-    xinfo("End of iter currentRSS: {} KB\n", vmrss_kb);
   }
   uint32_t max_k() const override { return KmerType::max_size(); }
 };

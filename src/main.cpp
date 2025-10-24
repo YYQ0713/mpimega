@@ -369,9 +369,11 @@ void setup_output_dir(Options& opt) {
         }
     }
 
-    mkdir_if_not_exists(opt.out_dir);
-    mkdir_if_not_exists(opt.temp_dir);
-    mkdir_if_not_exists(opt.contig_dir());
+    if (opt.mpienv_.rank == 0) {
+        mkdir_if_not_exists(opt.out_dir);
+        mkdir_if_not_exists(opt.temp_dir);
+        mkdir_if_not_exists(opt.contig_dir());
+    }
 }
 
 void create_library_file(Options &opt) {
@@ -1027,11 +1029,21 @@ void iterate(Options& opt, int cur_k, int k_step) {
     main_iterate(it_args.size(), const_cast<char**>(it_args.data()), opt.mpienv_);
 }
 
+void merge_final(Options& opt, int final_k) {
+    std::vector<std::string> args_merge = {"merge", std::to_string(opt.min_contig_len), contig_prefix(opt.contig_dir(), final_k) + ".contigs.fa", opt.out_dir + "/final.contigs.fa"};
+
+    std::vector<const char*> merge_args;
+    for (const auto& arg : args_merge) {
+        merge_args.push_back(arg.c_str());
+    }
+                                                
+    main_filter_by_len(merge_args.size(), const_cast<char**>(merge_args.data()));
+}
+
 int main(int argc, char **argv) {
     Options opt;
     opt.mpienv_.init(argc, argv);
 
-    
     parse_option(argc, argv, opt);
     setup_output_dir(opt);
     setup_logger(opt);
@@ -1072,7 +1084,10 @@ int main(int argc, char **argv) {
         cur_k = next_k;
         MPI_Barrier(MPI_COMM_WORLD);
     }
-    
+    if (opt.mpienv_.rank == 0) {
+        merge_final(opt, opt.k_max);
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
     opt.mpienv_.finalize();
     return 0;
 }
