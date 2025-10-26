@@ -63,8 +63,8 @@ void BaseSequenceSortingEngine::AdjustMemory() {
     }
   }
 
-  if (mpienv_.rank == 0)
-  {
+  // if (mpienv_.rank == 0)
+  // {
     lv1_start_bucket_vec = std::vector<uint32_t>(mpienv_.nprocs, 0x00000000U);
     lv1_end_bucket_vec = std::vector<uint32_t>(mpienv_.nprocs, 0x00000000U);
     int64_t target_per_process = total_bucket_size / mpienv_.nprocs;
@@ -87,7 +87,7 @@ void BaseSequenceSortingEngine::AdjustMemory() {
 
     lv1_start_bucket_vec[current_process] = start_bucket;
     lv1_end_bucket_vec[current_process] = kNumBuckets;
-  }
+  // }
 
   int64_t est_lv2_items =
       std::max(3 * total_bucket_size / std::max(1, num_non_empty) * n_threads_,
@@ -200,9 +200,10 @@ void BaseSequenceSortingEngine::Run() {
 
   lv0_timer.reset();
   lv0_timer.start();
-  
-  MPI_Scatter(lv1_start_bucket_vec.data(), 1, MPI_INT, &lv1_start_bucket_local_, 1, MPI_INT, 0, MPI_COMM_WORLD);
-  MPI_Scatter(lv1_end_bucket_vec.data(), 1, MPI_INT, &lv1_end_bucket_local_, 1, MPI_INT, 0, MPI_COMM_WORLD);
+  lv1_start_bucket_local_ = lv1_start_bucket_vec[mpienv_.rank];
+  lv1_end_bucket_local_ = lv1_end_bucket_vec[mpienv_.rank];
+  // MPI_Scatter(lv1_start_bucket_vec.data(), 1, MPI_INT, &lv1_start_bucket_local_, 1, MPI_INT, 0, MPI_COMM_WORLD);
+  // MPI_Scatter(lv1_end_bucket_vec.data(), 1, MPI_INT, &lv1_end_bucket_local_, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
   lv1_start_bucket_ = lv1_start_bucket_local_;
   xinfo("Start main loop...\n");
@@ -234,7 +235,8 @@ void BaseSequenceSortingEngine::Run() {
           lv1_timer.elapsed());
     lv1_start_bucket_ = lv1_end_bucket_;
   }
-
+  size_t vmrss_kb = getCurrentRSS_kb();
+  xinfo("End of seq2sdbg currentRSS: {} KB\n", vmrss_kb);
   lv0_timer.stop();
   xinfo("Main loop done. Time elapsed: {.4}\n", lv0_timer.elapsed());
   lv0_timer.reset();

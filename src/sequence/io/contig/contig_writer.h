@@ -17,15 +17,19 @@
 
 class ContigWriter {
  public:
-  explicit ContigWriter(const std::string file_name) : file_name_(file_name) {
-    file_ = xfopen(file_name.c_str(), "w");
+  explicit ContigWriter(const std::string file_name, int rank) : file_name_(file_name), rank_(rank) {
+    if (rank_ == 0){
+      file_ = xfopen(file_name.c_str(), "w");
+    }
   }
 
   ~ContigWriter() {
-    std::FILE *info_file = xfopen((file_name_ + ".info").c_str(), "w");
-    pfprintf(info_file, "{} {}\n", n_contigs_.load(), n_bases_.load());
-    fclose(info_file);
-    fclose(file_);
+    if (rank_ == 0){
+      std::FILE *info_file = xfopen((file_name_ + ".info").c_str(), "w");
+      pfprintf(info_file, "{} {}\n", n_contigs_.load(), n_bases_.load());
+      fclose(info_file);
+      fclose(file_);
+    }
   }
 
   void WriteContig(const std::string &ascii_contig, unsigned k_size,
@@ -50,6 +54,7 @@ class ContigWriter {
  private:
   std::string file_name_;
   std::FILE *file_;
+  int rank_;
   std::atomic<int64_t> n_contigs_{0};
   std::atomic<int64_t> n_bases_{0};
 };

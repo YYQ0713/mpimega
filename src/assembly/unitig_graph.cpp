@@ -12,16 +12,165 @@
 
 UnitigGraph::UnitigGraph(SDBG *sdbg, MPIEnviroment &mpienv)
     : sdbg_(sdbg), mpienv_(mpienv), adapter_impl_(this), sudo_adapter_impl_(this) {
+//   id_map_.clear();
+//   vertices_.clear();
+//   SpinLock path_lock;
+//   AtomicBitVector locks(sdbg_->size());
+//   size_t count_palindrome = 0;
+
+// // assemble simple paths
+// #pragma omp parallel for reduction(+ : count_palindrome)
+//   for (uint64_t edge_idx = mpienv.rank; edge_idx < sdbg_->size(); edge_idx += mpienv.nprocs) {
+//     if (sdbg_->IsValidEdge(edge_idx) &&
+//         sdbg_->NextSimplePathEdge(edge_idx) == SDBG::kNullID &&
+//         locks.try_lock(edge_idx)) {
+//       bool will_be_added = true;
+//       uint64_t cur_edge = edge_idx;
+//       uint64_t prev_edge;
+//       int64_t depth = sdbg_->EdgeMultiplicity(edge_idx);
+//       uint32_t length = 1;
+
+//       while ((prev_edge = sdbg_->PrevSimplePathEdge(cur_edge)) !=
+//              SDBG::kNullID) {
+//         cur_edge = prev_edge;
+//         if (!locks.try_lock(cur_edge)) {
+//           will_be_added = false;
+//           break;
+//         }
+//         depth += sdbg_->EdgeMultiplicity(cur_edge);
+//         ++length;
+//       }
+
+//       if (!will_be_added) {
+//         continue;
+//       }
+
+//       uint64_t rc_start = sdbg_->EdgeReverseComplement(edge_idx);
+//       uint64_t rc_end;
+//       assert(rc_start != SDBG::kNullID);
+
+//       if (!locks.try_lock(rc_start)) {
+//         rc_end = sdbg_->EdgeReverseComplement(cur_edge);
+//         if (std::max(edge_idx, cur_edge) < std::max(rc_start, rc_end)) {
+//           will_be_added = false;
+//         }
+//       } else {
+//         // lock through the rc path
+//         uint64_t rc_cur_edge = rc_start;
+//         rc_end = rc_cur_edge;
+//         bool extend_full = true;
+//         while ((rc_cur_edge = sdbg_->NextSimplePathEdge(rc_cur_edge)) !=
+//                SDBG::kNullID) {
+//           rc_end = rc_cur_edge;
+//           if (!locks.try_lock(rc_cur_edge)) {
+//             extend_full = false;
+//             break;
+//           }
+//         }
+//         if (!extend_full) {
+//           rc_end = sdbg_->EdgeReverseComplement(cur_edge);
+//           assert(rc_end != SDBG::kNullID);
+//         }
+//       }
+
+//       if (will_be_added && (rc_end % mpienv.nprocs != mpienv.rank)) {
+//         if (std::max(edge_idx, cur_edge) < std::max(rc_start, rc_end)) {
+//           will_be_added = false;
+//         }
+//       }
+
+//       if (will_be_added) {
+//         count_palindrome += cur_edge == rc_start;
+//         std::lock_guard<SpinLock> lk(path_lock);
+//         vertices_.emplace_back(cur_edge, edge_idx, rc_start, rc_end, depth,
+//                                length);
+//         //count_palindrome += cur_edge == rc_start;
+//       }
+//     }
+//   }
+//   xinfo("Graph size without loops: {}, palindrome: {}\n", vertices_.size(),
+//         count_palindrome);
+
+//   MPI_Allreduce(MPI_IN_PLACE, locks.data_array_.data(), locks.data_array_.size(), MPI_UNSIGNED_LONG, MPI_BOR, MPI_COMM_WORLD);
+
+//   if (mpienv.rank == 0) {
+//   // assemble looped paths
+//   std::mutex loop_lock;
+//   size_t count_loop = 0;
+// #pragma omp parallel for
+//   for (size_t edge_idx = 0; edge_idx < sdbg_->size(); ++edge_idx) {
+//     if (!locks.at(edge_idx) && sdbg_->IsValidEdge(edge_idx)) {
+//       std::lock_guard<std::mutex> lk(loop_lock);
+//       if (!locks.at(edge_idx)) {
+//         uint64_t cur_edge = edge_idx;
+//         uint64_t rc_edge = sdbg_->EdgeReverseComplement(edge_idx);
+//         uint64_t depth = sdbg_->EdgeMultiplicity(edge_idx);
+//         uint32_t length = 0;
+//         // whether it is marked before entering the loop
+//         bool rc_marked = locks.at(rc_edge);
+
+//         while (!locks.at(cur_edge)) {
+//           locks.set(cur_edge);
+//           depth += sdbg_->EdgeMultiplicity(cur_edge);
+//           ++length;
+//           cur_edge = sdbg_->PrevSimplePathEdge(cur_edge);
+//           assert(cur_edge != SDBG::kNullID);
+//         }
+//         assert(cur_edge == edge_idx);
+
+//         if (!rc_marked) {
+//           uint64_t start = sdbg_->NextSimplePathEdge(edge_idx);
+//           uint64_t end = edge_idx;
+//           vertices_.emplace_back(start, end, sdbg_->EdgeReverseComplement(end),
+//                                  sdbg_->EdgeReverseComplement(start), depth,
+//                                  length, true);
+//           count_loop += 1;
+//         }
+//       }
+//     }
+//   }
+//   xinfo("Graph size of loops: {}, count_loop: {}\n", vertices_.size(), count_loop);
+//   } // if (mpienv.rank == 0)
+
+//   sdbg_->FreeMultiplicity();
+//   MPI_Barrier(MPI_COMM_WORLD);
+//   size_t vmrss_kb = getCurrentRSS_kb();
+//   xinfo("Build uni graph befor gather and freeMulti currentRSS: {} KB\n", vmrss_kb);
+//   UniGather();
+
+//   xinfo("Graph size without loops: {}, palindrome: {}\n", vertices_.size(), count_palindrome);
+
+//   //show_info(mpienv.rank);
+//   //MPI_Barrier(MPI_COMM_WORLD); // Barrier
+//   //exit(0);
+
+//   if (vertices_.size() >= kMaxNumVertices) {
+//     xfatal(
+//         "Too many vertices in the unitig graph ({} >= {}), "
+//         "you may increase the kmer size to remove tons of erroneous kmers.\n",
+//         vertices_.size(), kMaxNumVertices);
+//   }
+  
+//   id_map_.reserve(vertices_.size() * 2 - count_palindrome);
+//   for (size_type i = 0; i < vertices_.size(); ++i) {
+//     VertexAdapter adapter(vertices_[i]);
+//     id_map_[adapter.b()] = i;
+//     id_map_[adapter.rb()] = i;
+//   }
+
+//   vmrss_kb = getCurrentRSS_kb();
+//   xinfo("Build uni graph and idmap currentRSS: {} KB\n", vmrss_kb);
+//   //assert(vertices_.size() * 2 - count_palindrome >= id_map_.size());
+//   MPI_Barrier(MPI_COMM_WORLD);
+
   id_map_.clear();
   vertices_.clear();
   SpinLock path_lock;
   AtomicBitVector locks(sdbg_->size());
   size_t count_palindrome = 0;
-  //init_db(opt);
-
 // assemble simple paths
 #pragma omp parallel for reduction(+ : count_palindrome)
-  for (uint64_t edge_idx = mpienv.rank; edge_idx < sdbg_->size(); edge_idx += mpienv.nprocs) {
+  for (uint64_t edge_idx = 0; edge_idx < sdbg_->size(); ++edge_idx) {
     if (sdbg_->IsValidEdge(edge_idx) &&
         sdbg_->NextSimplePathEdge(edge_idx) == SDBG::kNullID &&
         locks.try_lock(edge_idx)) {
@@ -74,27 +223,17 @@ UnitigGraph::UnitigGraph(SDBG *sdbg, MPIEnviroment &mpienv)
         }
       }
 
-      if (will_be_added && (rc_end % mpienv.nprocs != mpienv.rank)) {
-        if (std::max(edge_idx, cur_edge) < std::max(rc_start, rc_end)) {
-          will_be_added = false;
-        }
-      }
-
       if (will_be_added) {
-        count_palindrome += cur_edge == rc_start;
         std::lock_guard<SpinLock> lk(path_lock);
         vertices_.emplace_back(cur_edge, edge_idx, rc_start, rc_end, depth,
                                length);
-        //count_palindrome += cur_edge == rc_start;
+        count_palindrome += cur_edge == rc_start;
       }
     }
   }
   xinfo("Graph size without loops: {}, palindrome: {}\n", vertices_.size(),
         count_palindrome);
 
-  MPI_Allreduce(MPI_IN_PLACE, locks.data_array_.data(), locks.data_array_.size(), MPI_UNSIGNED_LONG, MPI_BOR, MPI_COMM_WORLD);
-
-  if (mpienv.rank == 0) {
   // assemble looped paths
   std::mutex loop_lock;
   size_t count_loop = 0;
@@ -130,20 +269,6 @@ UnitigGraph::UnitigGraph(SDBG *sdbg, MPIEnviroment &mpienv)
       }
     }
   }
-  xinfo("Graph size of loops: {}, count_loop: {}\n", vertices_.size(), count_loop);
-  } // if (mpienv.rank == 0)
-
-  sdbg_->FreeMultiplicity();
-  MPI_Barrier(MPI_COMM_WORLD);
-  size_t vmrss_kb = getCurrentRSS_kb();
-  xinfo("Build uni graph befor gather and freeMulti currentRSS: {} KB\n", vmrss_kb);
-  UniGather();
-
-  xinfo("Graph size without loops: {}, palindrome: {}\n", vertices_.size(), count_palindrome);
-
-  //show_info(mpienv.rank);
-  //MPI_Barrier(MPI_COMM_WORLD); // Barrier
-  //exit(0);
 
   if (vertices_.size() >= kMaxNumVertices) {
     xfatal(
@@ -151,56 +276,16 @@ UnitigGraph::UnitigGraph(SDBG *sdbg, MPIEnviroment &mpienv)
         "you may increase the kmer size to remove tons of erroneous kmers.\n",
         vertices_.size(), kMaxNumVertices);
   }
-  
+
+  sdbg_->FreeMultiplicity();
   id_map_.reserve(vertices_.size() * 2 - count_palindrome);
+
   for (size_type i = 0; i < vertices_.size(); ++i) {
     VertexAdapter adapter(vertices_[i]);
     id_map_[adapter.b()] = i;
     id_map_[adapter.rb()] = i;
   }
-// if (mpienv.rank == 0) {
-  
-//   OpenReadWrite_db();
-//   #pragma omp parallel
-//   {
-//     rocksdb::WriteBatch thread_batches;
-//     int64_t b_key, rb_key;
-//     #pragma omp for
-//     for (size_type i = 0; i < vertices_.size(); ++i) {
-//       VertexAdapter adapter(vertices_[i]);
-      
-//       rocksdb::Slice value(reinterpret_cast<const char*>(&i), sizeof(size_type));
-//       b_key = adapter.b();
-//       rb_key = adapter.rb();
-//       thread_batches.Put(rocksdb::Slice(reinterpret_cast<const char*>(&b_key), sizeof(int64_t)), value);
-//       thread_batches.Put(rocksdb::Slice(reinterpret_cast<const char*>(&rb_key), sizeof(int64_t)), value);
-//       //id_map_[adapter.b()] = i;
-//       //id_map_[adapter.rb()] = i;
-//       if (thread_batches.Count() > 4 * 1024 * 1024) { // 例如，1MB 的数据
-//         // 提交线程的批次
-//         rocksdb::Status write_status = db_->Write(write_options_, &thread_batches);
-        
-//         // 提交后清空，准备新的批次
-//         thread_batches.Clear();
-//       } 
-//     }
-//     // 检查 WriteBatch 是否为空的正确逻辑
-//     if (thread_batches.Count() > 0) {
-//       //std::lock_guard<std::mutex> lock(db_mutex);
-//       rocksdb::Status status = db_->Write(write_options_, &thread_batches);
-//       if (!status.ok()) {
-//         std::cerr << "Failed to write final batch: " << status.ToString() << std::endl;
-//       }
-//       thread_batches.Clear();
-//     }
-//   }
-//   Delete_db();
-// }
-
-  vmrss_kb = getCurrentRSS_kb();
-  xinfo("Build uni graph and idmap currentRSS: {} KB\n", vmrss_kb);
-  //assert(vertices_.size() * 2 - count_palindrome >= id_map_.size());
-  MPI_Barrier(MPI_COMM_WORLD);
+  assert(vertices_.size() * 2 - count_palindrome >= id_map_.size());
 }
 
 void UnitigGraph::RefreshDisconnected() {
@@ -274,6 +359,160 @@ void UnitigGraph::RefreshDisconnected() {
 }
 
 void UnitigGraph::Refresh(bool set_changed) {
+//   static const uint8_t kDeleted = 0x1;
+//   static const uint8_t kVisited = 0x2;
+//   RefreshDisconnected();
+// #pragma omp parallel for
+//   for (size_type i = 0; i < vertices_.size(); ++i) {
+//     auto adapter = MakeSudoAdapter(i);
+//     if (!adapter.IsToDelete()) {
+//       continue;
+//     }
+//     adapter.SetFlag(kDeleted);
+//     if (adapter.IsStandalone()) {
+//       continue;
+//     }
+//     for (int strand = 0; strand < 2; ++strand, adapter.ReverseComplement()) {
+//       uint64_t cur_edge = adapter.e();
+//       for (size_t j = 1; j < adapter.GetLength(); ++j) {
+//         auto prev = sdbg_->UniquePrevEdge(cur_edge);
+//         sdbg_->SetInvalidEdge(cur_edge);
+//         cur_edge = prev;
+//         assert(cur_edge != SDBG::kNullID);
+//       }
+//       assert(cur_edge == adapter.b());
+//       sdbg_->SetInvalidEdge(cur_edge);
+//       if (adapter.IsPalindrome()) {
+//         break;
+//       }
+//     }
+//   }
+
+//   AtomicBitVector locks(size());
+// #pragma omp parallel for
+//   for (size_type i = 0; i < vertices_.size(); ++i) {
+//     auto adapter = MakeSudoAdapter(i);
+//     if (adapter.IsStandalone() || (adapter.GetFlag() & kDeleted)) {
+//       continue;
+//     }
+//     for (int strand = 0; strand < 2; ++strand, adapter.ReverseComplement()) {
+//       if (PrevSimplePathAdapter(adapter).IsValid()) {
+//         continue;
+//       }
+//       if (!locks.try_lock(i)) {
+//         break;
+//       }
+//       std::vector<SudoVertexAdapter> linear_path;
+//       for (auto cur = NextSimplePathAdapter(adapter); cur.IsValid();
+//            cur = NextSimplePathAdapter(cur)) {
+//         linear_path.emplace_back(cur);
+//       }
+
+//       if (linear_path.empty()) {
+//         adapter.SetFlag(kVisited);
+//         break;
+//       }
+
+//       //size_type back_id = linear_path.back().UnitigId();
+//       //if (back_id != i && !locks.try_lock(back_id)) {
+//       //  if (back_id > i) {
+//       //    locks.unlock(i);
+//       //    break;
+//       //  } else {
+//       //    locks.lock(back_id);
+//       //  }
+//       //}
+//       size_type back_id = linear_path.back().UnitigId();
+//       if (back_id != i) {
+//         if (back_id < i) {
+//           locks.unlock(i);
+//           break;
+//         } else {
+//           locks.lock(back_id);
+//         }
+//       }
+
+//       auto new_length = adapter.GetLength();
+//       auto new_total_depth = adapter.GetTotalDepth();
+//       adapter.SetFlag(kVisited);
+
+//       for (auto &v : linear_path) {
+//         new_length += v.GetLength();
+//         new_total_depth += v.GetTotalDepth();
+//         if (v.canonical_id() != adapter.canonical_id()) v.SetFlag(kDeleted);
+//       }
+
+//       auto new_start = adapter.b();
+//       auto new_rc_end = adapter.re();
+//       auto new_rc_start = linear_path.back().rb();
+//       auto new_end = linear_path.back().e();
+
+//       adapter.SetBeginEnd(new_start, new_end, new_rc_start, new_rc_end);
+//       adapter.SetLength(new_length);
+//       adapter.SetTotalDepth(new_total_depth);
+//       if (set_changed) adapter.SetChanged();
+
+//       break;
+//     }
+//   }
+
+//   // looped path
+//   //std::mutex mutex;
+// //#pragma omp parallel for
+//   for (size_type i = 0; i < vertices_.size(); ++i) {
+//     auto adapter = MakeSudoAdapter(i);
+//     if (!adapter.IsStandalone() && !adapter.GetFlag()) {
+//       //std::lock_guard<std::mutex> lk(mutex);
+//       if (adapter.GetFlag()) {
+//         continue;
+//       }
+
+//       uint32_t length = adapter.GetLength();
+//       uint64_t total_depth = adapter.GetTotalDepth();
+//       SudoVertexAdapter next_adapter = adapter;
+//       while (true) {
+//         next_adapter = NextSimplePathAdapter(next_adapter);
+//         assert(next_adapter.IsValid());
+//         if (next_adapter.b() == adapter.b()) {
+//           break;
+//         }
+//         next_adapter.SetFlag(kDeleted);
+//         length += next_adapter.GetLength();
+//         total_depth += next_adapter.GetTotalDepth();
+//       }
+
+//       auto new_start = adapter.b();
+//       auto new_end = sdbg_->PrevSimplePathEdge(new_start);
+//       auto new_rc_end = adapter.re();
+//       auto new_rc_start = sdbg_->NextSimplePathEdge(new_rc_end);
+//       assert(new_start == sdbg_->EdgeReverseComplement(new_rc_end));
+//       assert(new_end == sdbg_->EdgeReverseComplement(new_rc_start));
+
+//       adapter.SetBeginEnd(new_start, new_end, new_rc_start, new_rc_end);
+//       adapter.SetLength(length);
+//       adapter.SetTotalDepth(total_depth);
+//       adapter.SetLooped();
+//       if (set_changed) adapter.SetChanged();
+//     }
+//   }
+
+//   vertices_.resize(std::remove_if(vertices_.begin(), vertices_.end(),
+//                                   [](UnitigGraphVertex &a) {
+//                                     return SudoVertexAdapter(a).GetFlag() &
+//                                            kDeleted;
+//                                   }) -
+//                    vertices_.begin());
+
+//   size_type num_changed = 0;
+// #pragma omp parallel for reduction(+ : num_changed)
+//   for (size_type i = 0; i < vertices_.size(); ++i) {
+//     auto adapter = MakeSudoAdapter(i);
+//     assert(adapter.IsStandalone() || adapter.GetFlag());
+//     adapter.SetFlag(0);
+//     id_map_.at(adapter.b()) = i;
+//     id_map_.at(adapter.rb()) = i;
+//     num_changed += adapter.IsChanged();
+//   }
   static const uint8_t kDeleted = 0x1;
   static const uint8_t kVisited = 0x2;
   RefreshDisconnected();
@@ -328,18 +567,9 @@ void UnitigGraph::Refresh(bool set_changed) {
         break;
       }
 
-      //size_type back_id = linear_path.back().UnitigId();
-      //if (back_id != i && !locks.try_lock(back_id)) {
-      //  if (back_id > i) {
-      //    locks.unlock(i);
-      //    break;
-      //  } else {
-      //    locks.lock(back_id);
-      //  }
-      //}
       size_type back_id = linear_path.back().UnitigId();
-      if (back_id != i) {
-        if (back_id < i) {
+      if (back_id != i && !locks.try_lock(back_id)) {
+        if (back_id > i) {
           locks.unlock(i);
           break;
         } else {
@@ -366,18 +596,17 @@ void UnitigGraph::Refresh(bool set_changed) {
       adapter.SetLength(new_length);
       adapter.SetTotalDepth(new_total_depth);
       if (set_changed) adapter.SetChanged();
-
       break;
     }
   }
 
   // looped path
-  //std::mutex mutex;
-//#pragma omp parallel for
+  std::mutex mutex;
+#pragma omp parallel for
   for (size_type i = 0; i < vertices_.size(); ++i) {
     auto adapter = MakeSudoAdapter(i);
     if (!adapter.IsStandalone() && !adapter.GetFlag()) {
-      //std::lock_guard<std::mutex> lk(mutex);
+      std::lock_guard<std::mutex> lk(mutex);
       if (adapter.GetFlag()) {
         continue;
       }
@@ -698,92 +927,3 @@ uint32_t UnitigGraph::VerticesIndexWithSdbgId(uint64_t sdbg_id) {
     assert(false && "BUG: sdbg_id not found in VerticesIndexWithSdbgId()");
     return -1;
 }
-
-// void UnitigGraph::init_db(AsmOptions &opt) {
-//   options_.create_if_missing = true;
-//   options_.IncreaseParallelism(opt.num_cpu_threads / 2);
-//   options_.max_background_jobs = opt.num_cpu_threads / 2; 
-//   // Write Buffer & Memtable 设置
-//   options_.write_buffer_size = 1ULL * 1024ULL * 1024ULL * 1024ULL; // 每个 memtable 1GB
-//   options_.max_write_buffer_number = 16;          // 最多 16 个 memtable
-//   options_.min_write_buffer_number_to_merge = 2; // 减少 flush 频率
-
-//   // Level-Compaction 优化
-//   options_.OptimizeUniversalStyleCompaction();   // Universal compaction 更适合写多
-//   options_.compaction_style = rocksdb::kCompactionStyleUniversal;
-//   options_.compaction_options_universal.size_ratio = 20;
-//   options_.compaction_options_universal.min_merge_width = 2;
-//   options_.compaction_options_universal.max_size_amplification_percent = 300;
-
-//   // 文件大小 & compaction 触发阈值
-//   options_.target_file_size_base = 1024ULL * 1024ULL * 1024ULL; // 每个 SST 文件更大，减少文件数量
-//   options_.level0_file_num_compaction_trigger = 8;    // L0 文件超过 8 就触发 compaction
-//   options_.level0_slowdown_writes_trigger = 20;       // 超过 20 慢写
-//   options_.level0_stop_writes_trigger = 40;           // 超过 40 停止写入，保护系统
-
-//   // 压缩算法选择
-//   options_.compression = rocksdb::kNoCompression;     // 写入密集，直接不压缩
-//   options_.bottommost_compression = rocksdb::kLZ4Compression; // 只有最后一层压缩，节省空间
-
-//   // I/O 优化
-//   options_.use_direct_io_for_flush_and_compaction = true;
-//   options_.use_direct_reads = true;
-//   options_.bytes_per_sync = 16 * 1024 * 1024;  // 每写 2MB 刷一次，平滑写入
-//   options_.wal_bytes_per_sync = 1 * 1024 * 1024;
-
-//   // Table Format & Cache
-//   rocksdb::BlockBasedTableOptions table_options;
-//   table_options.block_cache = rocksdb::NewLRUCache(8ULL * 1024ULL * 1024ULL * 1024ULL, 8); // 缓存 8GB block
-//   table_options.cache_index_and_filter_blocks = true;
-//   table_options.pin_l0_filter_and_index_blocks_in_cache = true;
-//   table_options.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10, false)); // 可选
-//   options_.table_factory.reset(NewBlockBasedTableFactory(table_options));
-
-//   // WriteOptions (批量写入场景可以关 WAL)
-//   write_options_.disableWAL = true; 
-//   write_options_.sync = false;      // 不强制同步 WAL
-
-//   db_path_ = opt.output_prefix + "_rocksdb";
-// }
-
-// void UnitigGraph::OpenReadWrite_db() {
-//   options_.create_if_missing = true;
-
-//   rocksdb::Status status = rocksdb::DB::Open(options_, db_path_, &db_);
-//   if (!status.ok()) {
-//       std::cerr << "Failed to open DB in read-write mode: " << status.ToString() << std::endl;
-//   }
-
-//   //xinfo("Successfully opened DB in read-write mode.\n");
-// }
-
-// void UnitigGraph::OpenReadOnly_db() {
-//   // ReadOnly 模式下，不需要创建数据库
-//   options_.create_if_missing = false; 
-
-//   // force_consistency 设置为 true 可以保证数据一致性
-//   bool force_consistency = true; 
-  
-//   rocksdb::Status status = rocksdb::DB::OpenForReadOnly(options_, db_path_, &db_, force_consistency);
-//   if (!status.ok()) {
-//       std::cerr << "Failed to open DB in read-only mode: " << status.ToString() << std::endl;
-//   }
-
-//   //xinfo("Successfully opened DB in read-only mode.\n");
-// }
-
-// void UnitigGraph::Delete_db() {
-//   delete db_;
-// }
-
-// bool UnitigGraph::is_del(uint32_t vtx_id) {
-//   return vtx_del_flag_.at(vtx_id);
-// }
-
-// void UnitigGraph::Destroy_db() {
-//   rocksdb::Options cleanup_options;
-//   rocksdb::Status status = rocksdb::DestroyDB(db_path_, cleanup_options);
-//   if (!status.ok()) {
-//       std::cerr << "Failed to clean up database: " << status.ToString() << std::endl;
-//   }
-// }

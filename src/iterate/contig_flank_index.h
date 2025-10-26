@@ -234,7 +234,7 @@ class ContigFlankIndex {
   
               //rocksdb::Status write_status = db->Put(write_options, key_slice, value_slice);
               // thread_batch.Put(key_slice, value_slice);
-              out->Insert(final_kmer);
+              out->Insert(final_kmer, value_to_write);
             }
             
 
