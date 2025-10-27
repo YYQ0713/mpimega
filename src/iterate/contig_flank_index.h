@@ -86,7 +86,7 @@ class ContigFlankIndex {
 
   template <class CollectorType, class WriterType>
   size_t FindNextKmersFromReads(const SeqPackage &seq_pkg,
-                                CollectorType *out, int rank, int nprocs, WriterType *mpiwiriter, int64_t *num_edges, Bloom *blf) const {
+                                CollectorType *out, int rank, int nprocs, WriterType *mpiwiriter, int64_t *num_edges) const {
     std::vector<bool> kmer_exist;
     std::vector<float> kmer_mul;
     size_t num_aligned_reads = 0;
@@ -220,37 +220,18 @@ class ContigFlankIndex {
           auto hash_result = hasher(final_kmer);
 
           if (hash_result % nprocs == rank) {
-            // out->Insert(final_kmer,
-            //             static_cast<mul_t>(
-            //                 std::min(kMaxMul, static_cast<int>(mul + 0.5))));
-            mul_t value_to_write = std::min(kMaxMul, static_cast<int>(mul + 0.5));
-            if (!blf->bloom_check_add(final_kmer)) {
-              mpiwiriter->WriteToBuf(final_kmer, value_to_write);
-              num_iter_edges++;
-            } else {
-              // rocksdb::Slice key_slice(reinterpret_cast<const char*>(final_kmer.data()), sizeof(final_kmer));
-              //mul_t value_to_write = std::min(kMaxMul, static_cast<int>(mul + 0.5));
-              // rocksdb::Slice value_slice(reinterpret_cast<const char*>(&value_to_write), sizeof(mul_t));
-  
-              //rocksdb::Status write_status = db->Put(write_options, key_slice, value_slice);
-              // thread_batch.Put(key_slice, value_slice);
-              out->Insert(final_kmer, value_to_write);
-            }
-            
-
-            // 检查批次大小，如果达到阈值则写入
-            // if (thread_batch.Count() > 4194304) { // 例如，4M次操作
-            //     // 提交线程的批次
-            //     rocksdb::Status write_status = db->Write(write_options, &thread_batch);
-                
-            //     // 提交后清空，准备新的批次
-            //     thread_batch.Clear();
-            // }
+            out->Insert(final_kmer,
+                        static_cast<mul_t>(
+                            std::min(kMaxMul, static_cast<int>(mul + 0.5))));
+            // mul_t value_to_write = std::min(kMaxMul, static_cast<int>(mul + 0.5));
 
             // if (!blf->bloom_check_add(final_kmer)) {
-            //   mpiwiriter->WriteToBuf(final_kmer, static_cast<mul_t>(std::min(kMaxMul, static_cast<int>(mul + 0.5))));
+            //   mpiwiriter->WriteToBuf(final_kmer, value_to_write);
             //   num_iter_edges++;
+            // } else {
+            //   out->Insert(final_kmer, value_to_write);
             // }
+            
           }
           success = true;
         }
@@ -262,33 +243,7 @@ class ContigFlankIndex {
         mpiwiriter->MPIFileWrite();
       }
     }
-
-    // 每个线程检查自己的批次是否为空，然后提交
-    // if (thread_batch.Count() != 0) {
-    //     db->Write(write_options, &thread_batch);
-    //     thread_batch.Clear();
-    // }
   }//#pragma omp parallel
-
-    // xinfo("finish db construct and start writing file\n");
-    // rocksdb::Iterator* it = db->NewIterator(rocksdb::ReadOptions());
-    // for (it->SeekToFirst(); it->Valid(); it->Next()) {
-    //   typename CollectorType::kmer_type tmp_kmer(it->key().data());
-    //   mul_t mul = *reinterpret_cast<const mul_t*>(it->value().data());
-    //   mpiwiriter->WriteToBuf(tmp_kmer, mul);
-    //   num_iter_edges++;
-    //   if (mpiwiriter->check_buf()) {
-    //     mpiwiriter->MPIFileWrite();
-    //   }
-    // }
-
-    // delete db;
-
-    // rocksdb::Options cleanup_options;
-    // status = rocksdb::DestroyDB(db_path, cleanup_options);
-    // if (!status.ok()) {
-    //    std::cerr << "Failed to clean up database: " << status.ToString() << std::endl;
-    // }
 
     *num_edges += num_iter_edges;
     return num_aligned_reads;

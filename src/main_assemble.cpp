@@ -326,6 +326,7 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
       timer.stop();
       xinfo("Tips removed: {}, time: {.3}\n", num_tips, timer.elapsed());
     }
+    MPI_Barrier(MPI_COMM_WORLD); // Barrier before graph cleaning
     // remove bubbles
     if (opt.bubble_level >= 1) {
       timer.reset();
@@ -336,7 +337,7 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
             num_bubbles, timer.elapsed());
       changed |= num_bubbles > 0;
     }
-
+    MPI_Barrier(MPI_COMM_WORLD); // Barrier before graph cleaning
     // remove complex bubbles
     if (opt.bubble_level >= 2) {
       timer.reset();
@@ -347,7 +348,7 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
             num_bubbles, timer.elapsed());
       changed |= num_bubbles > 0;
     }
-
+    MPI_Barrier(MPI_COMM_WORLD); // Barrier before graph cleaning
     // disconnect
     timer.reset();
     timer.start();
@@ -357,7 +358,7 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
     xinfo("Number unitigs disconnected: {}, time: {.3}\n", num_disconnected,
           timer.elapsed());
     changed |= num_disconnected > 0;
-
+    MPI_Barrier(MPI_COMM_WORLD); // Barrier before graph cleaning
     // excessive pruning
     uint32_t num_excessive_pruned = 0;
     if (opt.prune_level >= 3) {
@@ -376,11 +377,12 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
       timer.start();
       RemoveLocalLowDepth(graph, opt.min_depth, opt.max_tip_len,
                           opt.local_width, std::min(opt.low_local_ratio, 0.1),
-                          true, &num_excessive_pruned, mpienv);
+                          true, &num_excessive_pruned);
       timer.stop();
       xinfo("Unitigs removed in excessive pruning: {}, time: {.3}\n",
             num_excessive_pruned, timer.elapsed());
     }
+    MPI_Barrier(MPI_COMM_WORLD); // Barrier before graph cleaning
     if (!changed) break;
   }
 
@@ -414,6 +416,7 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
     ContigWriter addi_contig_writer(opt.addi_contig_file(), mpienv.rank);
     // MPIContigWriter mpi_addi_contig_writer(opt.addi_contig_file(), mpienv.rank);
 
+    int make_rank = mpienv.nprocs == 1 ? 0 : 1;
     timer.reset();
     timer.start();
     uint32_t num_removed = IterateLocalLowDepth(
@@ -430,12 +433,13 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
         "Number of local low depth unitigs removed: {}, complex bubbles "
         "removed: {}, time: {}\n",
         num_removed, n_bubbles, timer.elapsed());
-    //CalcAndPrintStat(graph);
-
-    timer.reset();
-    timer.start();
-
+    if (mpienv.rank == make_rank) {
+      CalcAndPrintStat(graph);
+    }
+    
     if (mpienv.rank == 0) {
+      timer.reset();
+      timer.start();
       if (!opt.is_final_round) {
         OutputContigs(graph, &addi_contig_writer, nullptr, true, 0);
         // MPIOutputContigs(graph, &mpi_addi_contig_writer, nullptr, true, 0, mpienv);
@@ -447,10 +451,10 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
         //               opt.output_standalone ? &mpi_standalone_writer : nullptr, false,
         //               opt.min_standalone, mpienv);
       }
+      timer.stop();
+      xinfo("Time to output after local low depth unitigs removed: {}\n", timer.elapsed());
     }
 
-    timer.stop();
-    xinfo("Time to output after local low depth unitigs removed: {}\n", timer.elapsed());
     //auto stat_changed = CalcAndPrintStat(graph, false, true);
   }
 

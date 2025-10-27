@@ -15,16 +15,16 @@ template <class KmerType>
 class KmerCollector {
  public:
   using kmer_type = KmerType;
-  //using kmer_plus = KmerPlus<KmerType, mul_t>;
-  using kmer_plus = KmerPlus<KmerType, bool>;
-  // using hash_set = phmap::parallel_flat_hash_set<
-  //     kmer_plus, KmerHash,
-  //     phmap::container_internal::hash_default_eq<kmer_plus>,
-  //     phmap::container_internal::Allocator<kmer_plus>, 12, SpinLock>;
-  using hash_set = phmap::parallel_flat_hash_map<
-      KmerType, mul_t, KmerHash,
-      phmap::container_internal::hash_default_eq<KmerType>,
-      phmap::container_internal::Allocator<phmap::container_internal::Pair<KmerType, bool>>, 12, SpinLock>;
+  using kmer_plus = KmerPlus<KmerType, mul_t>;
+  // using kmer_plus = KmerPlus<KmerType, bool>;
+  using hash_set = phmap::parallel_flat_hash_set<
+      kmer_plus, KmerHash,
+      phmap::container_internal::hash_default_eq<kmer_plus>,
+      phmap::container_internal::Allocator<kmer_plus>, 12, SpinLock>;
+  // using hash_set = phmap::parallel_flat_hash_map<
+  //     KmerType, mul_t, KmerHash,
+  //     phmap::container_internal::hash_default_eq<KmerType>,
+  //     phmap::container_internal::Allocator<phmap::container_internal::Pair<KmerType, bool>>, 12, SpinLock>;
 
   KmerCollector(unsigned k, const std::string &out_prefix, MPIEnviroment &mpienv)
       : k_(k), output_prefix_(out_prefix), mpienv_(mpienv) {
@@ -39,30 +39,26 @@ class KmerCollector {
     // writer_.InitFiles(mpienv_);
   }
 
-  // void Insert(const KmerType &kmer, mul_t mul) {
-    //collection_.insert({kmer, mul});
-    //collection_.emplace(kmer, mul);
-  // }
-
   void Insert(const KmerType &kmer, mul_t mul) {
-    mul_t multi = mul >> 1;
-    auto res = collection_.emplace(kmer, multi);
-    if (!res.second) {
-      // res.first->second = true;
-      res.first->second |= 0x8000;
-    }
+    collection_.insert({kmer, mul});
   }
+
+  // void Insert(const KmerType &kmer, mul_t mul) {
+  //   mul_t multi = mul >> 1;
+  //   auto res = collection_.emplace(kmer, multi);
+  //   if (!res.second) {
+  //     // res.first->second = true;
+  //     res.first->second |= 0x8000;
+  //   }
+  // }
 
   const hash_set &collection() const { return collection_; }
   void FlushToFile(MPIEdgeWriter<KmerType> &mpi_edgewiriter, int64_t &num_iterative_edges) {
     for (const auto &item : collection_) {
-      if (item.second & 0x8000) {
-        mul_t mul = item.second & 0x7fff;
-        mpi_edgewiriter.WriteToBuf(item.first, mul);
-        num_iterative_edges++;
-        if (mpi_edgewiriter.check_buf()) {
-          mpi_edgewiriter.MPIFileWrite();
-        }
+      mpi_edgewiriter.WriteToBuf(item.kmer, item.aux);
+      num_iterative_edges++;
+      if (mpi_edgewiriter.check_buf()) {
+        mpi_edgewiriter.MPIFileWrite();
       }
     }
   }

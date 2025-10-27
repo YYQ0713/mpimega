@@ -229,14 +229,15 @@ static bool ReadReadsAndProcessKernel(const IterOption &opt,
   int64_t num_iterative_edges = 0;
   MPIEdgeWriter<KmerType> mpi_edgewiriter(opt.kmer_k + opt.step + 1, opt.output_prefix, mpienv);
 
-  Bloom bloom(10000000000, 0.1);
+  //Bloom bloom(10000000000, 0.1);
 
   while (true) {
     const auto &read_pkg = reader.Next();
     if (read_pkg.seq_count() == 0) {
       break;
     }
-    num_aligned_reads += index.FindNextKmersFromReads(read_pkg, &collector, mpienv.rank, mpienv.nprocs, &mpi_edgewiriter, &num_iterative_edges, &bloom);
+    // num_aligned_reads += index.FindNextKmersFromReads(read_pkg, &collector, mpienv.rank, mpienv.nprocs, &mpi_edgewiriter, &num_iterative_edges, &bloom);
+    num_aligned_reads += index.FindNextKmersFromReads(read_pkg, &collector, mpienv.rank, mpienv.nprocs, &mpi_edgewiriter, &num_iterative_edges);
     num_total_reads += read_pkg.seq_count();
     xinfo("Processed: {}, aligned: {}. Iterative edges: {}\n", num_total_reads,
            num_aligned_reads, num_iterative_edges);

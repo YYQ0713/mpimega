@@ -74,17 +74,17 @@ UnitigGraph::UnitigGraph(SDBG *sdbg, MPIEnviroment &mpienv)
 //       }
 
 //       if (will_be_added && (rc_end % mpienv.nprocs != mpienv.rank)) {
-//         if (std::max(edge_idx, cur_edge) < std::max(rc_start, rc_end)) {
+//         // if (std::max(edge_idx, cur_edge) < std::max(rc_start, rc_end)) {
+//         if (rc_end % mpienv.nprocs < mpienv.rank) {
 //           will_be_added = false;
 //         }
 //       }
 
 //       if (will_be_added) {
-//         count_palindrome += cur_edge == rc_start;
 //         std::lock_guard<SpinLock> lk(path_lock);
 //         vertices_.emplace_back(cur_edge, edge_idx, rc_start, rc_end, depth,
 //                                length);
-//         //count_palindrome += cur_edge == rc_start;
+//         count_palindrome += cur_edge == rc_start;
 //       }
 //     }
 //   }
@@ -140,10 +140,6 @@ UnitigGraph::UnitigGraph(SDBG *sdbg, MPIEnviroment &mpienv)
 
 //   xinfo("Graph size without loops: {}, palindrome: {}\n", vertices_.size(), count_palindrome);
 
-//   //show_info(mpienv.rank);
-//   //MPI_Barrier(MPI_COMM_WORLD); // Barrier
-//   //exit(0);
-
 //   if (vertices_.size() >= kMaxNumVertices) {
 //     xfatal(
 //         "Too many vertices in the unitig graph ({} >= {}), "
@@ -162,7 +158,7 @@ UnitigGraph::UnitigGraph(SDBG *sdbg, MPIEnviroment &mpienv)
 //   xinfo("Build uni graph and idmap currentRSS: {} KB\n", vmrss_kb);
 //   //assert(vertices_.size() * 2 - count_palindrome >= id_map_.size());
 //   MPI_Barrier(MPI_COMM_WORLD);
-
+  
   id_map_.clear();
   vertices_.clear();
   SpinLock path_lock;
