@@ -26,6 +26,7 @@ class ContigFlankIndex {
   } __attribute__((packed));
   using Flank = KmerPlus<KmerType, FlankInfo>;
   using HashSet = phmap::flat_hash_set<Flank, KmerHash>;
+  // using HashSet = phmap::parallel_flat_hash_set<Flank, KmerHash, std::equal_to<Flank>, std::allocator<Flank>, 12, SpinLock>;
   // using HashSet = spp::sparse_hash_set<Flank, KmerHash>;
 
  public:

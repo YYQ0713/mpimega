@@ -6,9 +6,9 @@
 #define MEGAHIT_WEAK_LINK_REMOVER_H
 
 #include <cstdint>
-#include "mpienv/mpienv.hpp"
+
 class UnitigGraph;
 
-uint32_t DisconnectWeakLinks(UnitigGraph&, MPIEnviroment &mpienv, double local_ratio);
+uint32_t DisconnectWeakLinks(UnitigGraph&, double local_ratio);
 
 #endif  // MEGAHIT_WEAK_LINK_REMOVER_H

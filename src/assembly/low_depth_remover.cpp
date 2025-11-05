@@ -4,7 +4,6 @@
 
 #include "low_depth_remover.h"
 #include "unitig_graph.h"
-#include "utils/utils.h"
 
 namespace {
 
@@ -88,7 +87,7 @@ bool RemoveLocalLowDepth(UnitigGraph &graph, double min_depth, uint32_t max_len,
 
 uint32_t IterateLocalLowDepth(UnitigGraph &graph, double min_depth,
                               uint32_t min_len, uint32_t local_width,
-                              double local_ratio, MPIEnviroment &mpienv, bool permanent_rm) {
+                              double local_ratio, bool permanent_rm) {
   uint32_t total_removed = 0;
   while (min_depth < kMaxMul) {
     uint32_t num_removed = 0;

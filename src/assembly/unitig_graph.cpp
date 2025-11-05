@@ -12,161 +12,15 @@
 
 UnitigGraph::UnitigGraph(SDBG *sdbg, MPIEnviroment &mpienv)
     : sdbg_(sdbg), mpienv_(mpienv), adapter_impl_(this), sudo_adapter_impl_(this) {
-//   id_map_.clear();
-//   vertices_.clear();
-//   SpinLock path_lock;
-//   AtomicBitVector locks(sdbg_->size());
-//   size_t count_palindrome = 0;
-
-// // assemble simple paths
-// #pragma omp parallel for reduction(+ : count_palindrome)
-//   for (uint64_t edge_idx = mpienv.rank; edge_idx < sdbg_->size(); edge_idx += mpienv.nprocs) {
-//     if (sdbg_->IsValidEdge(edge_idx) &&
-//         sdbg_->NextSimplePathEdge(edge_idx) == SDBG::kNullID &&
-//         locks.try_lock(edge_idx)) {
-//       bool will_be_added = true;
-//       uint64_t cur_edge = edge_idx;
-//       uint64_t prev_edge;
-//       int64_t depth = sdbg_->EdgeMultiplicity(edge_idx);
-//       uint32_t length = 1;
-
-//       while ((prev_edge = sdbg_->PrevSimplePathEdge(cur_edge)) !=
-//              SDBG::kNullID) {
-//         cur_edge = prev_edge;
-//         if (!locks.try_lock(cur_edge)) {
-//           will_be_added = false;
-//           break;
-//         }
-//         depth += sdbg_->EdgeMultiplicity(cur_edge);
-//         ++length;
-//       }
-
-//       if (!will_be_added) {
-//         continue;
-//       }
-
-//       uint64_t rc_start = sdbg_->EdgeReverseComplement(edge_idx);
-//       uint64_t rc_end;
-//       assert(rc_start != SDBG::kNullID);
-
-//       if (!locks.try_lock(rc_start)) {
-//         rc_end = sdbg_->EdgeReverseComplement(cur_edge);
-//         if (std::max(edge_idx, cur_edge) < std::max(rc_start, rc_end)) {
-//           will_be_added = false;
-//         }
-//       } else {
-//         // lock through the rc path
-//         uint64_t rc_cur_edge = rc_start;
-//         rc_end = rc_cur_edge;
-//         bool extend_full = true;
-//         while ((rc_cur_edge = sdbg_->NextSimplePathEdge(rc_cur_edge)) !=
-//                SDBG::kNullID) {
-//           rc_end = rc_cur_edge;
-//           if (!locks.try_lock(rc_cur_edge)) {
-//             extend_full = false;
-//             break;
-//           }
-//         }
-//         if (!extend_full) {
-//           rc_end = sdbg_->EdgeReverseComplement(cur_edge);
-//           assert(rc_end != SDBG::kNullID);
-//         }
-//       }
-
-//       if (will_be_added && (rc_end % mpienv.nprocs != mpienv.rank)) {
-//         // if (std::max(edge_idx, cur_edge) < std::max(rc_start, rc_end)) {
-//         if (rc_end % mpienv.nprocs < mpienv.rank) {
-//           will_be_added = false;
-//         }
-//       }
-
-//       if (will_be_added) {
-//         std::lock_guard<SpinLock> lk(path_lock);
-//         vertices_.emplace_back(cur_edge, edge_idx, rc_start, rc_end, depth,
-//                                length);
-//         count_palindrome += cur_edge == rc_start;
-//       }
-//     }
-//   }
-//   xinfo("Graph size without loops: {}, palindrome: {}\n", vertices_.size(),
-//         count_palindrome);
-
-//   MPI_Allreduce(MPI_IN_PLACE, locks.data_array_.data(), locks.data_array_.size(), MPI_UNSIGNED_LONG, MPI_BOR, MPI_COMM_WORLD);
-
-//   if (mpienv.rank == 0) {
-//   // assemble looped paths
-//   std::mutex loop_lock;
-//   size_t count_loop = 0;
-// #pragma omp parallel for
-//   for (size_t edge_idx = 0; edge_idx < sdbg_->size(); ++edge_idx) {
-//     if (!locks.at(edge_idx) && sdbg_->IsValidEdge(edge_idx)) {
-//       std::lock_guard<std::mutex> lk(loop_lock);
-//       if (!locks.at(edge_idx)) {
-//         uint64_t cur_edge = edge_idx;
-//         uint64_t rc_edge = sdbg_->EdgeReverseComplement(edge_idx);
-//         uint64_t depth = sdbg_->EdgeMultiplicity(edge_idx);
-//         uint32_t length = 0;
-//         // whether it is marked before entering the loop
-//         bool rc_marked = locks.at(rc_edge);
-
-//         while (!locks.at(cur_edge)) {
-//           locks.set(cur_edge);
-//           depth += sdbg_->EdgeMultiplicity(cur_edge);
-//           ++length;
-//           cur_edge = sdbg_->PrevSimplePathEdge(cur_edge);
-//           assert(cur_edge != SDBG::kNullID);
-//         }
-//         assert(cur_edge == edge_idx);
-
-//         if (!rc_marked) {
-//           uint64_t start = sdbg_->NextSimplePathEdge(edge_idx);
-//           uint64_t end = edge_idx;
-//           vertices_.emplace_back(start, end, sdbg_->EdgeReverseComplement(end),
-//                                  sdbg_->EdgeReverseComplement(start), depth,
-//                                  length, true);
-//           count_loop += 1;
-//         }
-//       }
-//     }
-//   }
-//   xinfo("Graph size of loops: {}, count_loop: {}\n", vertices_.size(), count_loop);
-//   } // if (mpienv.rank == 0)
-
-//   sdbg_->FreeMultiplicity();
-//   MPI_Barrier(MPI_COMM_WORLD);
-//   size_t vmrss_kb = getCurrentRSS_kb();
-//   xinfo("Build uni graph befor gather and freeMulti currentRSS: {} KB\n", vmrss_kb);
-//   UniGather();
-
-//   xinfo("Graph size without loops: {}, palindrome: {}\n", vertices_.size(), count_palindrome);
-
-//   if (vertices_.size() >= kMaxNumVertices) {
-//     xfatal(
-//         "Too many vertices in the unitig graph ({} >= {}), "
-//         "you may increase the kmer size to remove tons of erroneous kmers.\n",
-//         vertices_.size(), kMaxNumVertices);
-//   }
-  
-//   id_map_.reserve(vertices_.size() * 2 - count_palindrome);
-//   for (size_type i = 0; i < vertices_.size(); ++i) {
-//     VertexAdapter adapter(vertices_[i]);
-//     id_map_[adapter.b()] = i;
-//     id_map_[adapter.rb()] = i;
-//   }
-
-//   vmrss_kb = getCurrentRSS_kb();
-//   xinfo("Build uni graph and idmap currentRSS: {} KB\n", vmrss_kb);
-//   //assert(vertices_.size() * 2 - count_palindrome >= id_map_.size());
-//   MPI_Barrier(MPI_COMM_WORLD);
-  
   id_map_.clear();
   vertices_.clear();
   SpinLock path_lock;
   AtomicBitVector locks(sdbg_->size());
   size_t count_palindrome = 0;
+
 // assemble simple paths
 #pragma omp parallel for reduction(+ : count_palindrome)
-  for (uint64_t edge_idx = 0; edge_idx < sdbg_->size(); ++edge_idx) {
+  for (uint64_t edge_idx = mpienv.rank; edge_idx < sdbg_->size(); edge_idx += mpienv.nprocs) {
     if (sdbg_->IsValidEdge(edge_idx) &&
         sdbg_->NextSimplePathEdge(edge_idx) == SDBG::kNullID &&
         locks.try_lock(edge_idx)) {
@@ -218,6 +72,13 @@ UnitigGraph::UnitigGraph(SDBG *sdbg, MPIEnviroment &mpienv)
           assert(rc_end != SDBG::kNullID);
         }
       }
+      auto edge_rem = rc_end % mpienv.nprocs;
+      if (will_be_added && (edge_rem != mpienv.rank)) {
+        // if (std::max(edge_idx, cur_edge) < std::max(rc_start, rc_end)) {
+        if (edge_rem < mpienv.rank) {
+          will_be_added = false;
+        }
+      }
 
       if (will_be_added) {
         std::lock_guard<SpinLock> lk(path_lock);
@@ -230,6 +91,9 @@ UnitigGraph::UnitigGraph(SDBG *sdbg, MPIEnviroment &mpienv)
   xinfo("Graph size without loops: {}, palindrome: {}\n", vertices_.size(),
         count_palindrome);
 
+  MPI_Allreduce(MPI_IN_PLACE, locks.data_array_.data(), locks.data_array_.size(), MPI_UNSIGNED_LONG, MPI_BOR, MPI_COMM_WORLD);
+
+  if (mpienv.rank == 0) {
   // assemble looped paths
   std::mutex loop_lock;
   size_t count_loop = 0;
@@ -265,6 +129,16 @@ UnitigGraph::UnitigGraph(SDBG *sdbg, MPIEnviroment &mpienv)
       }
     }
   }
+  xinfo("Graph size of loops: {}, count_loop: {}\n", vertices_.size(), count_loop);
+  } // if (mpienv.rank == 0)
+
+  sdbg_->FreeMultiplicity();
+  MPI_Barrier(MPI_COMM_WORLD);
+  size_t vmrss_kb = getCurrentRSS_kb();
+  xinfo("Build uni graph befor gather and freeMulti currentRSS: {} KB\n", vmrss_kb);
+  UniGather();
+
+  xinfo("Graph size without loops: {}, palindrome: {}\n", vertices_.size(), count_palindrome);
 
   if (vertices_.size() >= kMaxNumVertices) {
     xfatal(
@@ -272,16 +146,149 @@ UnitigGraph::UnitigGraph(SDBG *sdbg, MPIEnviroment &mpienv)
         "you may increase the kmer size to remove tons of erroneous kmers.\n",
         vertices_.size(), kMaxNumVertices);
   }
-
-  sdbg_->FreeMultiplicity();
+  
   id_map_.reserve(vertices_.size() * 2 - count_palindrome);
-
   for (size_type i = 0; i < vertices_.size(); ++i) {
     VertexAdapter adapter(vertices_[i]);
     id_map_[adapter.b()] = i;
     id_map_[adapter.rb()] = i;
   }
-  assert(vertices_.size() * 2 - count_palindrome >= id_map_.size());
+
+  vmrss_kb = getCurrentRSS_kb();
+  xinfo("Build uni graph and idmap currentRSS: {} KB\n", vmrss_kb);
+  //assert(vertices_.size() * 2 - count_palindrome >= id_map_.size());
+  MPI_Barrier(MPI_COMM_WORLD);
+
+/**************************************************************************/
+  
+  // id_map_.clear();
+  // vertices_.clear();
+  // SpinLock path_lock;
+  // AtomicBitVector locks(sdbg_->size());
+  // size_t count_palindrome = 0;
+  // // if (mpienv_.rank == 0) {
+  //   // assemble simple paths
+  //   #pragma omp parallel for reduction(+ : count_palindrome)
+  //     for (uint64_t edge_idx = 0; edge_idx < sdbg_->size(); ++edge_idx) {
+  //       if (sdbg_->IsValidEdge(edge_idx) &&
+  //           sdbg_->NextSimplePathEdge(edge_idx) == SDBG::kNullID &&
+  //           locks.try_lock(edge_idx)) {
+  //         bool will_be_added = true;
+  //         uint64_t cur_edge = edge_idx;
+  //         uint64_t prev_edge;
+  //         int64_t depth = sdbg_->EdgeMultiplicity(edge_idx);
+  //         uint32_t length = 1;
+    
+  //         while ((prev_edge = sdbg_->PrevSimplePathEdge(cur_edge)) !=
+  //                SDBG::kNullID) {
+  //           cur_edge = prev_edge;
+  //           if (!locks.try_lock(cur_edge)) {
+  //             will_be_added = false;
+  //             break;
+  //           }
+  //           depth += sdbg_->EdgeMultiplicity(cur_edge);
+  //           ++length;
+  //         }
+    
+  //         if (!will_be_added) {
+  //           continue;
+  //         }
+    
+  //         uint64_t rc_start = sdbg_->EdgeReverseComplement(edge_idx);
+  //         uint64_t rc_end;
+  //         assert(rc_start != SDBG::kNullID);
+    
+  //         if (!locks.try_lock(rc_start)) {
+  //           rc_end = sdbg_->EdgeReverseComplement(cur_edge);
+  //           if (std::max(edge_idx, cur_edge) < std::max(rc_start, rc_end)) {
+  //             will_be_added = false;
+  //           }
+  //         } else {
+  //           // lock through the rc path
+  //           uint64_t rc_cur_edge = rc_start;
+  //           rc_end = rc_cur_edge;
+  //           bool extend_full = true;
+  //           while ((rc_cur_edge = sdbg_->NextSimplePathEdge(rc_cur_edge)) !=
+  //                  SDBG::kNullID) {
+  //             rc_end = rc_cur_edge;
+  //             if (!locks.try_lock(rc_cur_edge)) {
+  //               extend_full = false;
+  //               break;
+  //             }
+  //           }
+  //           if (!extend_full) {
+  //             rc_end = sdbg_->EdgeReverseComplement(cur_edge);
+  //             assert(rc_end != SDBG::kNullID);
+  //           }
+  //         }
+    
+  //         if (will_be_added) {
+  //           std::lock_guard<SpinLock> lk(path_lock);
+  //           vertices_.emplace_back(cur_edge, edge_idx, rc_start, rc_end, depth,
+  //                                  length);
+  //           count_palindrome += cur_edge == rc_start;
+  //         }
+  //       }
+  //     }
+  //     xinfo("Graph size without loops: {}, palindrome: {}\n", vertices_.size(),
+  //           count_palindrome);
+    
+  //     // assemble looped paths
+  //     std::mutex loop_lock;
+  //     size_t count_loop = 0;
+  //   #pragma omp parallel for
+  //     for (size_t edge_idx = 0; edge_idx < sdbg_->size(); ++edge_idx) {
+  //       if (!locks.at(edge_idx) && sdbg_->IsValidEdge(edge_idx)) {
+  //         std::lock_guard<std::mutex> lk(loop_lock);
+  //         if (!locks.at(edge_idx)) {
+  //           uint64_t cur_edge = edge_idx;
+  //           uint64_t rc_edge = sdbg_->EdgeReverseComplement(edge_idx);
+  //           uint64_t depth = sdbg_->EdgeMultiplicity(edge_idx);
+  //           uint32_t length = 0;
+  //           // whether it is marked before entering the loop
+  //           bool rc_marked = locks.at(rc_edge);
+    
+  //           while (!locks.at(cur_edge)) {
+  //             locks.set(cur_edge);
+  //             depth += sdbg_->EdgeMultiplicity(cur_edge);
+  //             ++length;
+  //             cur_edge = sdbg_->PrevSimplePathEdge(cur_edge);
+  //             assert(cur_edge != SDBG::kNullID);
+  //           }
+  //           assert(cur_edge == edge_idx);
+    
+  //           if (!rc_marked) {
+  //             uint64_t start = sdbg_->NextSimplePathEdge(edge_idx);
+  //             uint64_t end = edge_idx;
+  //             vertices_.emplace_back(start, end, sdbg_->EdgeReverseComplement(end),
+  //                                    sdbg_->EdgeReverseComplement(start), depth,
+  //                                    length, true);
+  //             count_loop += 1;
+  //           }
+  //         }
+  //       }
+  //     }
+  // // }
+  
+  // sdbg_->FreeMultiplicity();
+  // if (vertices_.size() >= kMaxNumVertices) {
+  //   xfatal(
+  //       "Too many vertices in the unitig graph ({} >= {}), "
+  //       "you may increase the kmer size to remove tons of erroneous kmers.\n",
+  //       vertices_.size(), kMaxNumVertices);
+  // }
+  // // MPI_Barrier(MPI_COMM_WORLD);
+  // // RootBroadcast();
+
+  // id_map_.reserve(vertices_.size() * 2 - count_palindrome);
+
+  // for (size_type i = 0; i < vertices_.size(); ++i) {
+  //   VertexAdapter adapter(vertices_[i]);
+  //   id_map_[adapter.b()] = i;
+  //   id_map_[adapter.rb()] = i;
+  // }
+  // assert(vertices_.size() * 2 - count_palindrome >= id_map_.size());
+  // MPI_Barrier(MPI_COMM_WORLD);
 }
 
 void UnitigGraph::RefreshDisconnected() {
@@ -509,6 +516,9 @@ void UnitigGraph::Refresh(bool set_changed) {
 //     id_map_.at(adapter.rb()) = i;
 //     num_changed += adapter.IsChanged();
 //   }
+
+//******************************************************/
+
   static const uint8_t kDeleted = 0x1;
   static const uint8_t kVisited = 0x2;
   RefreshDisconnected();
@@ -851,6 +861,55 @@ void UnitigGraph::UniGather() {
     } else {
       MPI_Send(vertices_.data(), local_count, MPI_vertices, 0, 1, MPI_COMM_WORLD);
     }
+    vertices_.resize(total_count);
+  }
+
+  for (uint32_t offset = 0; offset < total_count; offset += CHUNK) {
+    int32_t chunk_size = std::min(CHUNK, static_cast<int32_t>(total_count - offset));
+    MPI_Bcast(vertices_.data() + offset, chunk_size, MPI_vertices, 0, MPI_COMM_WORLD);
+  }
+
+  MPI_Type_free(&MPI_vertices);
+}
+
+void UnitigGraph::RootBroadcast() {
+  MPI_Datatype MPI_vertices;
+
+  const int kFieldCount = 7;
+  int block_lengths[kFieldCount] = {3, 1, 1, 1, 1, 1, 1};
+  MPI_Aint displacements[kFieldCount];
+  displacements[0] = 0;
+  displacements[1] = 24;
+  displacements[2] = 32;
+  displacements[3] = 36;
+  displacements[4] = 37;
+  displacements[5] = 38;
+  displacements[6] = 39;
+
+  MPI_Datatype types[kFieldCount] = {
+    MPI_UINT64_T,
+    MPI_UINT64_T,
+    MPI_UINT32_T,
+    MPI_C_BOOL,
+    MPI_C_BOOL,
+    MPI_C_BOOL,
+    MPI_UINT8_T,
+  };
+
+  MPI_Type_create_struct(kFieldCount, block_lengths, displacements, types, &MPI_vertices);
+  MPI_Type_commit(&MPI_vertices);
+
+  int32_t CHUNK = INT_MAX;
+  uint32_t total_count;
+  if (mpienv_.rank == 0) {
+    total_count = vertices_.size();
+  }
+  
+  // 广播 total_count
+  MPI_Bcast(&total_count, 1, MPI_UINT32_T, 0, MPI_COMM_WORLD);
+
+  // 非 0 号进程根据接收到的 count 进行 resize
+  if (mpienv_.rank != 0) {
     vertices_.resize(total_count);
   }
 

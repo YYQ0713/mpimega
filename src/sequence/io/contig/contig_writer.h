@@ -147,7 +147,7 @@ class MPIContigWriter {
   }
 
   bool check_buf() {
-    return write_buffer.size() >= 268435456;
+    return write_buffer.size() >= BUFSIZE;
   }
 
   void allreduce() {
@@ -164,7 +164,7 @@ class MPIContigWriter {
   MPI_File mpi_file;                       // MPI 文件句柄
   std::string write_buffer;                // 缓冲区
   std::mutex buffer_mutex;                 // 保护缓冲区的互斥锁
-  static const unsigned BUFSIZE = 268435456; // 256 MB
+  static const unsigned BUFSIZE = 1024ULL * 1024ULL * 1024ULL; // 256 MB
 };
 
 #endif  // MEGAHIT_CONTIG_WRITER_H

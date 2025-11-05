@@ -19,8 +19,12 @@ class KmerCollector {
   // using kmer_plus = KmerPlus<KmerType, bool>;
   using hash_set = phmap::parallel_flat_hash_set<
       kmer_plus, KmerHash,
-      phmap::container_internal::hash_default_eq<kmer_plus>,
-      phmap::container_internal::Allocator<kmer_plus>, 12, SpinLock>;
+      std::equal_to<kmer_plus>,
+      std::allocator<kmer_plus>, 12, SpinLock>;
+  // using hash_set = phmap::parallel_flat_hash_set<
+  //     kmer_plus, KmerHash,
+  //     phmap::container_internal::hash_default_eq<kmer_plus>,
+  //     phmap::container_internal::Allocator<kmer_plus>, 12, SpinLock>;
   // using hash_set = phmap::parallel_flat_hash_map<
   //     KmerType, mul_t, KmerHash,
   //     phmap::container_internal::hash_default_eq<KmerType>,
@@ -54,12 +58,29 @@ class KmerCollector {
 
   const hash_set &collection() const { return collection_; }
   void FlushToFile(MPIEdgeWriter<KmerType> &mpi_edgewiriter, int64_t &num_iterative_edges) {
+    // for (const auto &item : collection_) {
+    //   mpi_edgewiriter.WriteToBuf(item.kmer, item.aux);
+    //   num_iterative_edges++;
+    //   if (mpi_edgewiriter.check_buf()) {
+    //     mpi_edgewiriter.MPIFileWrite();
+    //   }
+    // }
+    const size_t BATCH_SIZE = 1024; // 根据实际情况调整
+    size_t count = 0;
+
     for (const auto &item : collection_) {
-      mpi_edgewiriter.WriteToBuf(item.kmer, item.aux);
-      num_iterative_edges++;
-      if (mpi_edgewiriter.check_buf()) {
+        mpi_edgewiriter.WriteToBuf(item.kmer, item.aux);
+        num_iterative_edges++;
+        
+        if (++count >= BATCH_SIZE) {
+            mpi_edgewiriter.MPIFileWrite();
+            count = 0;
+        }
+    }
+
+    // 写入剩余数据
+    if (count > 0) {
         mpi_edgewiriter.MPIFileWrite();
-      }
     }
   }
 

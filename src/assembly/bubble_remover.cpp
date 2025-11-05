@@ -221,7 +221,6 @@ size_t BaseBubbleRemover::PopBubbles(UnitigGraph &graph, bool permanent_rm,
                                      uint32_t max_len,
                                      const checker_type &checker, MPIEnviroment &mpienv) {
   uint32_t num_removed = 0;
-
 #pragma omp parallel for reduction(+ : num_removed)
   for (UnitigGraph::size_type i = 0; i < graph.size(); ++i) {
     UnitigGraph::VertexAdapter adapter = graph.MakeVertexAdapter(i);

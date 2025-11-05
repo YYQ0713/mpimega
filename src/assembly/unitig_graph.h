@@ -61,6 +61,7 @@ class UnitigGraph {
   void Mpi_Allreduce_vertices();
   void Mpi_Bcast_vertices();
   void UniGather();
+  void RootBroadcast();
   void show_info(int rank);
   void vertices_resize(size_t size);
   // void vertices_sort();

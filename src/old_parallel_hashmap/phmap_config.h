@@ -18,7 +18,7 @@
 //
 // Includes work from abseil-cpp (https://github.com/abseil/abseil-cpp)
 // with modifications.
-//
+// 
 // Copyright 2018 The Abseil Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -34,7 +34,7 @@
 // limitations under the License.
 // ---------------------------------------------------------------------------
 
-#define PHMAP_VERSION_MAJOR 2
+#define PHMAP_VERSION_MAJOR 1
 #define PHMAP_VERSION_MINOR 0
 #define PHMAP_VERSION_PATCH 0
 
@@ -81,14 +81,14 @@
     #error "phmap requires __apple_build_version__ of 4211165 or higher."
 #endif
 
-// Enforce C++11 as the minimum.
+// Enforce C++11 as the minimum. 
 #if defined(__cplusplus) && !defined(_MSC_VER)
     #if __cplusplus < 201103L
         #error "C++ versions less than C++11 are not supported."
     #endif
 #endif
 
-// We have chosen glibc 2.12 as the minimum
+// We have chosen glibc 2.12 as the minimum 
 #if defined(__GLIBC__) && defined(__GLIBC_PREREQ)
     #if !__GLIBC_PREREQ(2, 12)
         #error "Minimum required version of glibc is 2.12."
@@ -100,14 +100,13 @@
 #endif
 
 #if CHAR_BIT != 8
-    #warning "phmap assumes CHAR_BIT == 8."
+    #error "phmap assumes CHAR_BIT == 8."
 #endif
 
-// phmap currently assumes that an int is 4 bytes.
+// phmap currently assumes that an int is 4 bytes. 
 #if INT_MAX < 2147483647
     #error "phmap assumes that int is at least 4 bytes. "
 #endif
-
 
 
 // -----------------------------------------------------------------------------
@@ -120,33 +119,33 @@
     #define PHMAP_HAVE_BUILTIN(x) 0
 #endif
 
-#if (!defined(__GNUC__) || defined(__clang__) || __GNUC__ >= 5) && \
-    ((defined(_MSVC_LANG) && _MSVC_LANG >= 201703L) || __cplusplus >= 201703L)
-    #define PHMAP_HAVE_CC17 1
-#else
-    #define PHMAP_HAVE_CC17 0
+// ----------------------------------------------------------------
+// Checks whether `std::is_trivially_destructible<T>` is supported.
+// ----------------------------------------------------------------
+#ifdef PHMAP_HAVE_STD_IS_TRIVIALLY_DESTRUCTIBLE
+    #error PHMAP_HAVE_STD_IS_TRIVIALLY_DESTRUCTIBLE cannot be directly set
+#elif defined(_LIBCPP_VERSION) ||                                        \
+    (!defined(__clang__) && defined(__GNUC__) && defined(__GLIBCXX__) && \
+     (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 8))) ||        \
+    defined(_MSC_VER)
+    #define PHMAP_HAVE_STD_IS_TRIVIALLY_DESTRUCTIBLE 1
 #endif
 
-#define PHMAP_BRANCHLESS 1
-
-#ifdef __has_feature
-#define PHMAP_HAVE_FEATURE(f) __has_feature(f)
-#else
-#define PHMAP_HAVE_FEATURE(f) 0
-#endif
-
-// Portable check for GCC minimum version:
-// https://gcc.gnu.org/onlinedocs/cpp/Common-Predefined-Macros.html
-#if defined(__GNUC__) && defined(__GNUC_MINOR__)
-    #define PHMAP_INTERNAL_HAVE_MIN_GNUC_VERSION(x, y) (__GNUC__ > (x) || __GNUC__ == (x) && __GNUC_MINOR__ >= (y))
-#else
-    #define PHMAP_INTERNAL_HAVE_MIN_GNUC_VERSION(x, y) 0
-#endif
-
-#if defined(__clang__) && defined(__clang_major__) && defined(__clang_minor__)
-    #define PHMAP_INTERNAL_HAVE_MIN_CLANG_VERSION(x, y) (__clang_major__ > (x) || __clang_major__ == (x) && __clang_minor__ >= (y))
-#else
-    #define PHMAP_INTERNAL_HAVE_MIN_CLANG_VERSION(x, y) 0
+// --------------------------------------------------------------
+// Checks whether `std::is_trivially_default_constructible<T>` is 
+// supported.
+// --------------------------------------------------------------
+#if defined(PHMAP_HAVE_STD_IS_TRIVIALLY_CONSTRUCTIBLE)
+    #error PHMAP_HAVE_STD_IS_TRIVIALLY_CONSTRUCTIBLE cannot be directly set
+#elif defined(PHMAP_HAVE_STD_IS_TRIVIALLY_ASSIGNABLE)
+    #error PHMAP_HAVE_STD_IS_TRIVIALLY_ASSIGNABLE cannot directly set
+#elif (defined(__clang__) && defined(_LIBCPP_VERSION)) ||        \
+    (!defined(__clang__) && defined(__GNUC__) &&                 \
+     (__GNUC__ > 5 || (__GNUC__ == 5 && __GNUC_MINOR__ >= 1)) && \
+     (defined(_LIBCPP_VERSION) || defined(__GLIBCXX__))) ||      \
+    (defined(_MSC_VER) && !defined(__NVCC__))
+    #define PHMAP_HAVE_STD_IS_TRIVIALLY_CONSTRUCTIBLE 1
+    #define PHMAP_HAVE_STD_IS_TRIVIALLY_ASSIGNABLE 1
 #endif
 
 // -------------------------------------------------------------------
@@ -155,7 +154,7 @@
 // -------------------------------------------------------------------
 #ifdef PHMAP_HAVE_THREAD_LOCAL
     #error PHMAP_HAVE_THREAD_LOCAL cannot be directly set
-#elif defined(__APPLE__) && defined(__clang__)
+#elif defined(__APPLE__)
     #if __has_feature(cxx_thread_local) && \
         !(TARGET_OS_IPHONE && __IPHONE_OS_VERSION_MIN_REQUIRED < __IPHONE_9_0)
         #define PHMAP_HAVE_THREAD_LOCAL 1
@@ -176,21 +175,17 @@
         #undef PHMAP_HAVE_TLS
         #undef PHMAP_HAVE_THREAD_LOCAL
     #endif
-#endif
+#endif 
 
 // ------------------------------------------------------------
-// Checks whether the __int128 compiler extension for a 128-bit
+// Checks whether the __int128 compiler extension for a 128-bit 
 // integral type is supported.
 // ------------------------------------------------------------
-#if defined(__arm__) && !defined(__aarch64__)
-    #define PHMAP_ARM_32
-#endif
-
 #ifdef PHMAP_HAVE_INTRINSIC_INT128
     #error PHMAP_HAVE_INTRINSIC_INT128 cannot be directly set
 #elif defined(__SIZEOF_INT128__)
-#if (defined(__clang__) && !defined(_WIN32) && !(defined(PHMAP_ARM_32))) || \
-        (defined(__CUDACC__) && __CUDACC_VER_MAJOR__ >= 9) ||               \
+    #if (defined(__clang__) && !defined(_WIN32) && !defined(__aarch64__)) || \
+        (defined(__CUDACC__) && __CUDACC_VER_MAJOR__ >= 9) ||                \
         (defined(__GNUC__) && !defined(__clang__) && !defined(__CUDACC__))
         #define PHMAP_HAVE_INTRINSIC_INT128 1
     #elif defined(__CUDACC__)
@@ -201,7 +196,7 @@
 #endif
 
 // ------------------------------------------------------------------
-// Checks whether the compiler both supports and enables exceptions.
+// Checks whether the compiler both supports and enables exceptions. 
 // ------------------------------------------------------------------
 #ifdef PHMAP_HAVE_EXCEPTIONS
     #error PHMAP_HAVE_EXCEPTIONS cannot be directly set.
@@ -301,29 +296,19 @@
 #endif
 
 #ifdef __has_include
-    #if __has_include(<string_view>) && __cplusplus >= 201703L && \
-        (!defined(_MSC_VER) || _MSC_VER >= 1920) // vs2019
+    #if __has_include(<string_view>) && __cplusplus >= 201703L
         #define PHMAP_HAVE_STD_STRING_VIEW 1
     #endif
 #endif
 
 // #pragma message(PHMAP_VAR_NAME_VALUE(_MSVC_LANG))
 
-#if defined(_MSC_VER) && _MSC_VER >= 1910 && PHMAP_HAVE_CC17
+#if defined(_MSC_VER) && _MSC_VER >= 1910 && \
+    ((defined(_MSVC_LANG) && _MSVC_LANG > 201402) || __cplusplus > 201402)
     // #define PHMAP_HAVE_STD_ANY 1
     #define PHMAP_HAVE_STD_OPTIONAL 1
     #define PHMAP_HAVE_STD_VARIANT 1
-    #if !defined(PHMAP_HAVE_STD_STRING_VIEW) && _MSC_VER >= 1920
-        #define PHMAP_HAVE_STD_STRING_VIEW 1
-    #endif
-#endif
-
-#if PHMAP_HAVE_CC17
-    #ifdef __has_include
-       #if __has_include(<shared_mutex>)
-           #define PHMAP_HAVE_SHARED_MUTEX 1
-       #endif
-    #endif
+    #define PHMAP_HAVE_STD_STRING_VIEW 1
 #endif
 
 #ifndef PHMAP_HAVE_STD_STRING_VIEW
@@ -338,13 +323,6 @@
     #define PHMAP_INTERNAL_MSVC_2017_DBG_MODE
 #endif
 
-// ---------------------------------------------------------------------------
-// Checks whether wchar_t is treated as a native type
-// (MSVC: /Zc:wchar_t- treats wchar_t as unsigned short)
-// ---------------------------------------------------------------------------
-#if !defined(_MSC_VER) || defined(_NATIVE_WCHAR_T_DEFINED)
-#define PHMAP_HAS_NATIVE_WCHAR_T
-#endif
 
 // -----------------------------------------------------------------------------
 // Sanitizer Attributes
@@ -409,7 +387,7 @@
     #define PHMAP_ATTRIBUTE_ALWAYS_INLINE
 #endif
 
-#if !defined(__INTEL_COMPILER) && (PHMAP_HAVE_ATTRIBUTE(noinline) || (defined(__GNUC__) && !defined(__clang__)))
+#if PHMAP_HAVE_ATTRIBUTE(noinline) || (defined(__GNUC__) && !defined(__clang__))
     #define PHMAP_ATTRIBUTE_NOINLINE __attribute__((noinline))
     #define PHMAP_HAVE_ATTRIBUTE_NOINLINE 1
 #else
@@ -445,9 +423,7 @@
     #define PHMAP_ATTRIBUTE_NONNULL(...)
 #endif
 
-#if PHMAP_HAVE_ATTRIBUTE(noreturn)
-    #define PHMAP_ATTRIBUTE_NORETURN [[noreturn]]
-#elif defined(__GNUC__) && !defined(__clang__)
+#if PHMAP_HAVE_ATTRIBUTE(noreturn) || (defined(__GNUC__) && !defined(__clang__))
     #define PHMAP_ATTRIBUTE_NORETURN __attribute__((noreturn))
 #elif defined(_MSC_VER)
     #define PHMAP_ATTRIBUTE_NORETURN __declspec(noreturn)
@@ -627,7 +603,7 @@
 #endif
 
 #ifndef PHMAP_HAVE_SSSE3
-    #if defined(__SSSE3__) || defined(__AVX2__)
+    #ifdef __SSSE3__
         #define PHMAP_HAVE_SSSE3 1
     #else
         #define PHMAP_HAVE_SSSE3 0
@@ -646,35 +622,6 @@
     #include <tmmintrin.h>
 #endif
 
-
-// ----------------------------------------------------------------------
-// constexpr if
-// ----------------------------------------------------------------------
-#if PHMAP_HAVE_CC17
-    #define PHMAP_IF_CONSTEXPR(expr) if constexpr ((expr))
-#else
-    #define PHMAP_IF_CONSTEXPR(expr) if ((expr))
-#endif
-
-// ----------------------------------------------------------------------
-// builtin unreachable
-// ----------------------------------------------------------------------
-#if PHMAP_HAVE_BUILTIN(__builtin_unreachable)
-    #define PHMAP_BUILTIN_UNREACHABLE() __builtin_unreachable()
-#else
-    #define PHMAP_BUILTIN_UNREACHABLE() (void)0
-#endif
-
-// ----------------------------------------------------------------------
-// RESTRICT
-// ----------------------------------------------------------------------
-#if (defined(__GNUC__) && (__GNUC__ > 3)) || defined(__clang__)
-    #define PHMAP_RESTRICT __restrict__
-#elif defined(_MSC_VER) && _MSC_VER >= 1400
-    #define PHMAP_RESTRICT __restrict
-#else
-    #define PHMAP_RESTRICT
-#endif
 
 // ----------------------------------------------------------------------
 // base/macros.h
@@ -697,9 +644,8 @@ namespace macros_internal {
 }  // namespace macros_internal
 }  // namespace phmap
 
-#if PHMAP_HAVE_CPP_ATTRIBUTE(fallthrough)
-    #define PHMAP_FALLTHROUGH [[fallthrough]]
-#elif defined(__clang__) && defined(__has_warning)
+// TODO(zhangxy): Use c++17 standard [[fallthrough]] macro, when supported.
+#if defined(__clang__) && defined(__has_warning)
     #if __has_feature(cxx_attributes) && __has_warning("-Wimplicit-fallthrough")
         #define PHMAP_FALLTHROUGH_INTENDED [[clang::fallthrough]]
     #endif

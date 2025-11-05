@@ -321,7 +321,7 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
     if (round > 1) {
       timer.reset();
       timer.start();
-      uint32_t num_tips = RemoveTips(graph, opt.max_tip_len, mpienv);
+      uint32_t num_tips = RemoveTips(graph, opt.max_tip_len);
       changed |= num_tips > 0;
       timer.stop();
       xinfo("Tips removed: {}, time: {.3}\n", num_tips, timer.elapsed());
@@ -353,7 +353,7 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
     timer.reset();
     timer.start();
     uint32_t num_disconnected =
-        DisconnectWeakLinks(graph, mpienv, opt.disconnect_ratio);
+        DisconnectWeakLinks(graph, opt.disconnect_ratio);
     timer.stop();
     xinfo("Number unitigs disconnected: {}, time: {.3}\n", num_disconnected,
           timer.elapsed());
@@ -421,7 +421,7 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
     timer.start();
     uint32_t num_removed = IterateLocalLowDepth(
         graph, opt.min_depth, opt.max_tip_len, opt.local_width,
-        opt.low_local_ratio, mpienv, opt.is_final_round);
+        opt.low_local_ratio, opt.is_final_round);
 
     uint32_t n_bubbles = 0;
     if (opt.bubble_level >= 2 && opt.merge_len > 0) {
@@ -433,7 +433,7 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
         "Number of local low depth unitigs removed: {}, complex bubbles "
         "removed: {}, time: {}\n",
         num_removed, n_bubbles, timer.elapsed());
-    if (mpienv.rank == make_rank) {
+    if (mpienv.rank == 0) {
       CalcAndPrintStat(graph);
     }
     

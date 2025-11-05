@@ -45,7 +45,7 @@ class HashMapper {
  public:
   // using TMapper = phmap::flat_hash_map<TKmer, uint64_t, KmerHash>;
   using TKmer = Kmer<2, uint32_t>;
-  using TMapper = phmap::parallel_flat_hash_map<TKmer, uint64_t, KmerHash>;
+  using TMapper = phmap::parallel_flat_hash_map<TKmer, uint64_t, KmerHash, std::equal_to<TKmer>, std::allocator<std::pair<const TKmer, uint64_t>>, 12, SpinLock>;
   // using TMapper = phmap::parallel_flat_hash_map<
   //   TKmer, uint64_t, KmerHash,
   //   phmap::container_internal::hash_default_eq<TKmer>,
