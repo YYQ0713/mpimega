@@ -95,11 +95,7 @@ class ContigFlankIndex {
 
     KmerHash hasher;
 
-  #pragma omp parallel
-  {
-    //rocksdb::WriteBatch thread_batch;
-
-    #pragma omp for reduction(+ : num_aligned_reads, num_iter_edges) private(kmer_exist, kmer_mul)
+#pragma omp parallel for reduction(+ : num_aligned_reads) private(kmer_exist, kmer_mul)
     for (unsigned seq_id = 0; seq_id < seq_pkg.seq_count(); ++seq_id) {
       auto seq_view = seq_pkg.GetSeqView(seq_id);
       size_t length = seq_view.length();
@@ -240,11 +236,10 @@ class ContigFlankIndex {
       num_aligned_reads += success;
 
       //仅主线程检查并刷新 buffer
-      if (omp_get_thread_num() == 0 && mpiwiriter->check_buf()) {
-        mpiwiriter->MPIFileWrite();
-      }
+      // if (omp_get_thread_num() == 0 && mpiwiriter->check_buf()) {
+      //   mpiwiriter->MPIFileWrite();
+      // }
     }
-  }//#pragma omp parallel
 
     *num_edges += num_iter_edges;
     return num_aligned_reads;

@@ -146,7 +146,9 @@ UnitigGraph::UnitigGraph(SDBG *sdbg, MPIEnviroment &mpienv)
         "you may increase the kmer size to remove tons of erroneous kmers.\n",
         vertices_.size(), kMaxNumVertices);
   }
-  
+  vertices_sort();
+  MPI_Barrier(MPI_COMM_WORLD);
+
   id_map_.reserve(vertices_.size() * 2 - count_palindrome);
   for (size_type i = 0; i < vertices_.size(); ++i) {
     VertexAdapter adapter(vertices_[i]);
@@ -950,11 +952,11 @@ void UnitigGraph::vertices_resize(size_t size) {
 }
 
 //按照strandinfo的begin升序排序
-// void UnitigGraph::vertices_sort() {
-//     tbb::parallel_sort(vertices_.begin(), vertices_.end(),
-//         [](const UnitigGraphVertex& a, const UnitigGraphVertex& b) { return a.strand_info[0].begin < b.strand_info[0].begin; }
-//     );
-// }
+void UnitigGraph::vertices_sort() {
+  std::sort(vertices_.begin(), vertices_.end(),
+      [](const UnitigGraphVertex& a, const UnitigGraphVertex& b) { return (a.strand_info[0].begin + a.strand_info[1].begin) < (b.strand_info[0].begin + b.strand_info[1].begin); }
+  );
+}
 
 size_t UnitigGraph::vertices_size() {
     return vertices_.size();

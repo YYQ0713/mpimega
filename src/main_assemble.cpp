@@ -433,9 +433,9 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
         "Number of local low depth unitigs removed: {}, complex bubbles "
         "removed: {}, time: {}\n",
         num_removed, n_bubbles, timer.elapsed());
-    if (mpienv.rank == 0) {
+    //if (mpienv.rank == 0) {
       CalcAndPrintStat(graph);
-    }
+    //}
     
     if (mpienv.rank == 0) {
       timer.reset();

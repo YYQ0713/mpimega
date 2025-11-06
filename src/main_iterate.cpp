@@ -240,7 +240,7 @@ static bool ReadReadsAndProcessKernel(const IterOption &opt,
     num_aligned_reads += index.FindNextKmersFromReads(read_pkg, &collector, mpienv.rank, mpienv.nprocs, &mpi_edgewiriter, &num_iterative_edges);
     num_total_reads += read_pkg.seq_count();
     xinfo("Processed: {}, aligned: {}. Iterative edges: {}\n", num_total_reads,
-           num_aligned_reads, num_iterative_edges);
+           num_aligned_reads, collector.collection().size());
     //xinfo("Processed: {}, aligned: {}.\n", num_total_reads, num_aligned_reads);
   }
   

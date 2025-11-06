@@ -21,14 +21,7 @@ class KmerCollector {
       kmer_plus, KmerHash,
       std::equal_to<kmer_plus>,
       std::allocator<kmer_plus>, 12, SpinLock>;
-  // using hash_set = phmap::parallel_flat_hash_set<
-  //     kmer_plus, KmerHash,
-  //     phmap::container_internal::hash_default_eq<kmer_plus>,
-  //     phmap::container_internal::Allocator<kmer_plus>, 12, SpinLock>;
-  // using hash_set = phmap::parallel_flat_hash_map<
-  //     KmerType, mul_t, KmerHash,
-  //     phmap::container_internal::hash_default_eq<KmerType>,
-  //     phmap::container_internal::Allocator<phmap::container_internal::Pair<KmerType, bool>>, 12, SpinLock>;
+  // using hash_set = phmap::parallel_flat_hash_set<kmer_plus, KmerHash>;
 
   KmerCollector(unsigned k, const std::string &out_prefix, MPIEnviroment &mpienv)
       : k_(k), output_prefix_(out_prefix), mpienv_(mpienv) {
@@ -65,7 +58,7 @@ class KmerCollector {
     //     mpi_edgewiriter.MPIFileWrite();
     //   }
     // }
-    const size_t BATCH_SIZE = 1024; // 根据实际情况调整
+    const size_t BATCH_SIZE = 1024ULL * 1024ULL; // 根据实际情况调整
     size_t count = 0;
 
     for (const auto &item : collection_) {
