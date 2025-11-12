@@ -326,6 +326,7 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
       timer.stop();
       xinfo("Tips removed: {}, time: {.3}\n", num_tips, timer.elapsed());
     }
+    CalcAndPrintStat(graph);
     MPI_Barrier(MPI_COMM_WORLD); // Barrier before graph cleaning
     // remove bubbles
     if (opt.bubble_level >= 1) {
@@ -337,6 +338,7 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
             num_bubbles, timer.elapsed());
       changed |= num_bubbles > 0;
     }
+    CalcAndPrintStat(graph);
     MPI_Barrier(MPI_COMM_WORLD); // Barrier before graph cleaning
     // remove complex bubbles
     if (opt.bubble_level >= 2) {
@@ -348,6 +350,7 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
             num_bubbles, timer.elapsed());
       changed |= num_bubbles > 0;
     }
+    CalcAndPrintStat(graph);
     MPI_Barrier(MPI_COMM_WORLD); // Barrier before graph cleaning
     // disconnect
     timer.reset();
@@ -358,6 +361,7 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
     xinfo("Number unitigs disconnected: {}, time: {.3}\n", num_disconnected,
           timer.elapsed());
     changed |= num_disconnected > 0;
+    CalcAndPrintStat(graph);
     MPI_Barrier(MPI_COMM_WORLD); // Barrier before graph cleaning
     // excessive pruning
     uint32_t num_excessive_pruned = 0;
@@ -382,6 +386,7 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
       xinfo("Unitigs removed in excessive pruning: {}, time: {.3}\n",
             num_excessive_pruned, timer.elapsed());
     }
+    CalcAndPrintStat(graph);
     MPI_Barrier(MPI_COMM_WORLD); // Barrier before graph cleaning
     if (!changed) break;
   }

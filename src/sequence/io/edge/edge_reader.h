@@ -20,6 +20,12 @@ class EdgeReader : public BaseSequenceReader {
     metadata_.Deserialize(is);
     InitFiles();
   }
+  ~EdgeReader() {
+    if (mpi_file_opened_) {
+      MPI_File_close(&mpi_file_);
+      mpi_file_opened_ = false;
+    }
+  }
   EdgeReader *SetMultiplicityVec(std::vector<mul_t> *mul) {
     mul_ = mul;
     return this;
@@ -67,6 +73,8 @@ class EdgeReader : public BaseSequenceReader {
  private:
   std::vector<mul_t> *mul_{nullptr};
   MPIEnviroment mpienv_;
+  MPI_File mpi_file_;
+  bool mpi_file_opened_{false};
   std::string file_prefix_;
   std::vector<std::unique_ptr<std::ifstream>> in_streams_;
   BufferedReader cur_reader_;
@@ -103,6 +111,9 @@ class EdgeReader : public BaseSequenceReader {
         }
       }
     } else {
+      std::string filename = file_prefix_ + ".rank.0.edges.0";
+      int ret = MPI_File_open(MPI_COMM_WORLD, filename.c_str(), MPI_MODE_RDONLY, MPI_INFO_NULL, &mpi_file_);
+      mpi_file_opened_ = true;
       for (unsigned i = 0; i < metadata_.num_files; ++i) {
       in_streams_.emplace_back(
           new std::ifstream(file_prefix_ + ".rank." + std::to_string(i) + ".edges.0",
@@ -125,7 +136,7 @@ class EdgeReader : public BaseSequenceReader {
     cur_bucket_ = -1;
 
     if (!metadata_.is_sorted) {
-      cur_reader_.reset(in_streams_[0].get());
+      cur_reader_.reset_mpi(in_streams_[0].get(), mpi_file_);
     }
 
     is_opened_ = true;
@@ -176,7 +187,7 @@ class EdgeReader : public BaseSequenceReader {
     }
 
     ++cur_cnt_;
-    auto n_read = cur_reader_.read(buffer_.data(), metadata_.words_per_edge);
+    auto n_read = cur_reader_.read_mpi(buffer_.data(), metadata_.words_per_edge);
     assert(n_read == metadata_.words_per_edge * sizeof(uint32_t));
     (void)n_read;
     return buffer_.data();

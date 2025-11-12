@@ -228,25 +228,11 @@ size_t BaseBubbleRemover::PopBubbles(UnitigGraph &graph, bool permanent_rm,
       continue;
     }
     for (int strand = 0; strand < 2; ++strand, adapter.ReverseComplement()) {
-      // num_removed += SearchAndPopBubble(graph, adapter, max_len, checker, to_delete);
       num_removed += SearchAndPopBubble(graph, adapter, max_len, checker, mpienv.rank);
     }
   }
-
-  // MPI_Allreduce(MPI_IN_PLACE, &num_removed, 1, MPI_UINT32_T, MPI_SUM, MPI_COMM_WORLD);
-  // MPI_Allreduce(MPI_IN_PLACE, to_delete.data_array_.data(), to_delete.data_array_.size(), MPI_UINT8_T, MPI_BOR, MPI_COMM_WORLD);
-
-// #pragma omp parallel for reduction(+ : num_rm)
-//   for (UnitigGraph::size_type i = 0; i < graph.size(); ++i) {
-//     if (to_delete.at(i)) {
-//       auto adapter = graph.MakeVertexAdapter(i);
-//       adapter.SetToDelete();
-//       num_rm++;
-//     }
-//   }
   graph.Refresh(!permanent_rm);
   return num_removed;
-  // return num_rm;
 }
 
 size_t ComplexBubbleRemover::PopBubbles(UnitigGraph &graph, bool permanent_rm, MPIEnviroment &mpienv) {
