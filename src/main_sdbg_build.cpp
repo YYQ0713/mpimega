@@ -27,7 +27,6 @@
 
 #include "definitions.h"
 #include "sorting/kmer_counter.h"
-#include "sorting/kmer_counter_ga.h"
 #include "sorting/read_to_sdbg.h"
 #include "sorting/seq_to_sdbg.h"
 #include "utils/options_description.h"
@@ -83,6 +82,7 @@ int main_kmer_count(int argc, char **argv, MPIEnviroment &mpienv) {
   }
 
   KmerCounter runner(opt, mpienv);
+  // KmerCounter runner(opt);
   runner.Run();
 
   return 0;
@@ -246,6 +246,7 @@ int main_seq2sdbg(int argc, char **argv, MPIEnviroment &mpienv) {
   }
 
   SeqToSdbg runner(opt, mpienv);
+  // SeqToSdbg runner(opt);
   runner.Run();
 
   return 0;
@@ -305,6 +306,7 @@ int main_read2sdbg(int argc, char **argv, MPIEnviroment &mpienv) {
   {
     // stage 1
     Read2SdbgS1 runner(opt, &pkg, mpienv);
+    // Read2SdbgS1 runner(opt, &pkg);
     if (opt.solid_threshold > 1) {
       runner.Run();
     } else {
@@ -317,6 +319,7 @@ int main_read2sdbg(int argc, char **argv, MPIEnviroment &mpienv) {
   {
     // stage 2
     Read2SdbgS2 runner(opt, &pkg, mpienv);
+    // Read2SdbgS2 runner(opt, &pkg);
     runner.Run();
   }
 

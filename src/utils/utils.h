@@ -67,7 +67,7 @@ inline void DecomposeUint64(RandomIt dst, uint64_t x) {
   dst[1] = x & 0xFFFFFFFFllu;
 }
 
-#define megahit_log__(str, args...) pfprintf(stdout, str, ##args)
+#define megahit_log__(str, args...) pfprintf(stderr, str, ##args)
 
 #ifndef __XFILE__
 #include <cstring>

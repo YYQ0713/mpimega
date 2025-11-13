@@ -325,7 +325,7 @@ void RunLocalAssembly(const LocalAsmOption &opt, MPIEnviroment &mpienv) {
   timer.start();
   HashMapper mapper;
   mapper.LoadAndBuild(opt.contig_file, opt.min_contig_len, opt.seed_kmer,
-                      opt.sparsity, mpienv);
+                      opt.sparsity, mpienv, opt.num_threads);
   mapper.SetMappingThreshold(opt.min_mapping_len, opt.similarity);
   timer.stop();
   xinfo("Hash mapper construction time elapsed: {}\n", timer.elapsed());

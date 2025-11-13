@@ -7,6 +7,9 @@
 
 #include <vector>
 #include <algorithm>
+#include <iostream>
+#include "mpienv/mpienv.hpp"
+
 
 namespace kmlib {
 
@@ -100,6 +103,13 @@ class CompactVector {
     auto new_end = std::copy(vec_ptr_->begin() + local_size, vec_ptr_->end(), vec_ptr_->begin());
     int tmp_size = vec_size - local_size;
     vec_ptr_->resize(tmp_size);
+  }
+
+  void debug_print() const {
+    std::cout << "CompactVector underlying words (" << vec_ptr_->size() << " words):\n";
+    for (size_t i = 0; i < vec_ptr_->size(); ++i) {
+      std::cout << "  [" << i << "] = 0x" << std::hex << (*vec_ptr_)[i] << std::dec << "\n";
+    }
   }
 
   void resize(size_type size) {

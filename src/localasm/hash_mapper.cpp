@@ -5,6 +5,7 @@
 #include "hash_mapper.h"
 #include "sequence/io/contig/contig_reader.h"
 #include "utils/utils.h"
+#include <omp.h>
 
 namespace {
 
@@ -54,7 +55,7 @@ inline int Mismatch(uint32_t x, uint32_t y) {
 }  // namespace
 
 void HashMapper::LoadAndBuild(const std::string &contig_file, int32_t min_len,
-                              int32_t seed_kmer_size, int32_t sparsity, MPIEnviroment &mpienv) {
+                              int32_t seed_kmer_size, int32_t sparsity, MPIEnviroment &mpienv, int32_t n_threads) {
   seed_kmer_size_ = seed_kmer_size;
   ContigReader reader(contig_file);
   reader.SetMinLen(min_len)->SetDiscardFlag(contig_flag::kLoop);
@@ -69,32 +70,60 @@ void HashMapper::LoadAndBuild(const std::string &contig_file, int32_t min_len,
   size_t sz = refseq_.seq_count();
   size_t n_kmers = 0;
 
-#pragma omp parallel for reduction(+ : n_kmers)
-  for (size_t i = 0; i < sz; ++i) {
-    n_kmers +=
-        (refseq_.GetSeqView(i).length() - seed_kmer_size + sparsity) / sparsity;
+// #pragma omp parallel for reduction(+ : n_kmers)
+//   for (size_t i = 0; i < sz; ++i) {
+//     n_kmers +=
+//         (refseq_.GetSeqView(i).length() - seed_kmer_size + sparsity) / sparsity;
+//   }
+
+//   index_.reserve(n_kmers);
+  SpinLock mapper_lock;
+  local_index_.resize(n_threads);
+
+  #pragma omp parallel
+  {
+    int tid = omp_get_thread_num();
+    auto &lindex = local_index_[tid];
+    #pragma omp for
+      for (size_t i = 0; i < sz; ++i) {
+        TKmer key;
+        auto contig_view = refseq_.GetSeqView(i);
+        for (int j = 0, len = contig_view.length(); j + seed_kmer_size <= len;
+            j += sparsity) {
+          auto ptr_and_offset = contig_view.raw_address(j);
+          key.InitFromPtr(ptr_and_offset.first, ptr_and_offset.second,
+                          seed_kmer_size);
+          auto kmer = key.unique_format(seed_kmer_size);
+          auto offset = EncodeContigOffset(contig_view.id(), j, key != kmer);
+          // std::lock_guard<SpinLock> lk(mapper_lock);
+          // auto res = index_.emplace(kmer, offset);
+          // if (!res.second) {
+          //   res.first->second |= 1ULL << 63;
+          // }
+          auto res = lindex.emplace(kmer, offset);
+          if (!res.second) {
+            res.first->second |= 1ULL << 63;
+          }
+        }
+      }
   }
 
-  index_.reserve(n_kmers);
-  SpinLock mapper_lock;
+  size_t n_actual = 0;
+  for (auto &lindex : local_index_)
+    n_actual += lindex.size();
 
-#pragma omp parallel for
-  for (size_t i = 0; i < sz; ++i) {
-    TKmer key;
-    auto contig_view = refseq_.GetSeqView(i);
-    for (int j = 0, len = contig_view.length(); j + seed_kmer_size <= len;
-         j += sparsity) {
-      auto ptr_and_offset = contig_view.raw_address(j);
-      key.InitFromPtr(ptr_and_offset.first, ptr_and_offset.second,
-                      seed_kmer_size);
-      auto kmer = key.unique_format(seed_kmer_size);
-      auto offset = EncodeContigOffset(contig_view.id(), j, key != kmer);
-      //std::lock_guard<SpinLock> lk(mapper_lock);
-      auto res = index_.emplace(kmer, offset);
+  index_.reserve(n_actual);
+  
+  //Merge sub local_index
+  for (auto &lindex : local_index_) {
+    for (auto &kv : lindex) {
+      auto res = index_.emplace(kv.first, kv.second);
       if (!res.second) {
         res.first->second |= 1ULL << 63;
       }
     }
+    lindex.clear();
+    lindex.rehash(0);
   }
 
   xinfo("Number of contigs: {}, index size: {}\n", refseq_.seq_count(),

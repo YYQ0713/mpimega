@@ -141,7 +141,9 @@ int BaseBubbleRemover::SearchAndPopBubble(UnitigGraph &graph,
                                           UnitigGraph::VertexAdapter &adapter,
                                           uint32_t max_len,
                                           const checker_type &checker,
-                                          kmlib::AtomicBitVector<uint8_t> &to_delete) {
+                                          kmlib::AtomicBitVector<uint8_t> &to_delete,
+                                          kmlib::AtomicBitVector<uint8_t> &careful_bubbleid,
+                                          int rank) {
   UnitigGraph::VertexAdapter right;
   UnitigGraph::VertexAdapter middle[4];
   UnitigGraph::VertexAdapter possible_right[4];
@@ -199,20 +201,23 @@ int BaseBubbleRemover::SearchAndPopBubble(UnitigGraph &graph,
     num_removed += 1;
     if (bubble_file_ && middle[j].GetAvgDepth() >=
                             middle[0].GetAvgDepth() * careful_threshold_) {
-      std::string label = graph.VertexToDNAString(middle[j]);
-      bubble_file_->WriteContig(label, graph.k(), 0, 0,
-                                middle[j].GetAvgDepth());
+      // std::string label = graph.VertexToDNAString(middle[j]);
+      // bubble_file_->WriteContig(label, graph.k(), 0, 0,
+      //                           middle[j].GetAvgDepth());
+      careful_bubbleid.set(middle[j].UnitigId());
       careful_merged = true;
     }
   }
 
   if (careful_merged) {
-    std::string left_label = graph.VertexToDNAString(adapter);
-    std::string right_label = graph.VertexToDNAString(right);
-    bubble_file_->WriteContig(left_label, graph.k(), 0, 0,
-                              adapter.GetAvgDepth());
-    bubble_file_->WriteContig(right_label, graph.k(), 0, 0,
-                              right.GetAvgDepth());
+    // std::string left_label = graph.VertexToDNAString(adapter);
+    // std::string right_label = graph.VertexToDNAString(right);
+    // bubble_file_->WriteContig(left_label, graph.k(), 0, 0,
+    //                           adapter.GetAvgDepth());
+    // bubble_file_->WriteContig(right_label, graph.k(), 0, 0,
+    //                           right.GetAvgDepth());
+    careful_bubbleid.set(adapter.UnitigId());
+    careful_bubbleid.set(right.UnitigId());
   }
   return num_removed;
 }
@@ -221,16 +226,47 @@ size_t BaseBubbleRemover::PopBubbles(UnitigGraph &graph, bool permanent_rm,
                                      uint32_t max_len,
                                      const checker_type &checker, MPIEnviroment &mpienv) {
   uint32_t num_removed = 0;
-#pragma omp parallel for reduction(+ : num_removed)
-  for (UnitigGraph::size_type i = 0; i < graph.size(); ++i) {
+  kmlib::AtomicBitVector<uint8_t> to_delete_(graph.size());
+  kmlib::AtomicBitVector<uint8_t> careful_bubble_(graph.size());
+// #pragma omp parallel for reduction(+ : num_removed)
+  // for (UnitigGraph::size_type i = 0; i < graph.size(); ++i) {
+#pragma omp parallel for
+  for (UnitigGraph::size_type i = mpienv.rank; i < graph.size(); i += mpienv.nprocs) {
     UnitigGraph::VertexAdapter adapter = graph.MakeVertexAdapter(i);
     if (adapter.IsStandalone()) {
       continue;
     }
     for (int strand = 0; strand < 2; ++strand, adapter.ReverseComplement()) {
-      num_removed += SearchAndPopBubble(graph, adapter, max_len, checker, mpienv.rank);
+      // num_removed += SearchAndPopBubble(graph, adapter, max_len, checker, mpienv.rank);
+      SearchAndPopBubble(graph, adapter, max_len, checker, to_delete_, careful_bubble_, mpienv.rank);
     }
   }
+
+  MPI_Allreduce(MPI_IN_PLACE, to_delete_.data_array_.data(), to_delete_.data_array_.size(), MPI_UINT8_T, MPI_BOR, MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE, careful_bubble_.data_array_.data(), careful_bubble_.data_array_.size(), MPI_UINT8_T, MPI_BOR, MPI_COMM_WORLD);
+
+#pragma omp parallel for reduction(+ : num_removed)
+  for (size_t i = 0; i < graph.size(); i++) {
+    if (to_delete_.at(i)) {
+      UnitigGraph::VertexAdapter adapter = graph.MakeVertexAdapter(i);
+      adapter.SetToDelete();
+      num_removed++;
+    }
+  }
+
+  if (mpienv.rank == 0) {
+    #pragma omp parallel for
+      for (size_t i = 0; i < graph.size(); i++) {
+        if (careful_bubble_.at(i)) {
+          UnitigGraph::VertexAdapter adapter = graph.MakeVertexAdapter(i);
+          std::string label = graph.VertexToDNAString(adapter);
+
+          bubble_file_->WriteContig(label, graph.k(), 0, 0,
+                                    adapter.GetAvgDepth());
+        }
+      }
+  }
+
   graph.Refresh(!permanent_rm);
   return num_removed;
 }

@@ -43,15 +43,15 @@ struct MappingRecord {
 
 class HashMapper {
  public:
-  // using TMapper = phmap::flat_hash_map<TKmer, uint64_t, KmerHash>;
-  using TKmer = Kmer<2, uint32_t>;
-  using TMapper = phmap::parallel_flat_hash_map<TKmer, uint64_t, KmerHash>;
+ using TKmer = Kmer<2, uint32_t>;
+ using TMapper = phmap::flat_hash_map<TKmer, uint64_t, KmerHash>;
+  // using TMapper = phmap::parallel_flat_hash_map<TKmer, uint64_t, KmerHash>;
   // using TMapper = phmap::parallel_flat_hash_map<
   //   TKmer, uint64_t, KmerHash,
   //   phmap::container_internal::hash_default_eq<TKmer>,
   //   phmap :: container_internal :: Allocator < phmap :: container_internal :: Pair < const TKmer, uint64_t >>, 12, SpinLock>;
   void LoadAndBuild(const std::string &contig_file, int32_t min_len,
-                    int32_t seed_kmer_size, int32_t sparsity, MPIEnviroment &mpienv);
+                    int32_t seed_kmer_size, int32_t sparsity, MPIEnviroment &mpienv, int32_t n_threads);
 
   void SetMappingThreshold(int32_t mapping_len, double similarity) {
     min_mapped_len_ = mapping_len;
@@ -69,6 +69,7 @@ class HashMapper {
 
  private:
   TMapper index_;
+  std::vector<TMapper> local_index_;
   SeqPackage refseq_;
 
   int32_t seed_kmer_size_{31};

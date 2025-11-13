@@ -577,3 +577,14 @@ void Read2SdbgS1::Lv0Postprocess() {
     fclose(mercy_files_[i]);
   }
 }
+
+// void Read2SdbgS1::Lv0Postprocess() {
+//   // --- stat ---
+//   xinfo("Total number of solid edges: {}\n",
+//         edge_counter_.GetNumSolidEdges(opt_.solid_threshold));
+//   std::ofstream counting_file(std::string(opt_.output_prefix) + ".counting");
+//   edge_counter_.DumpStat(counting_file);
+//   for (int i = 0; i < seq_pkg_->n_mercy_files; ++i) {
+//     fclose(mercy_files_[i]);
+//   }
+// }

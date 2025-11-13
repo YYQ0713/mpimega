@@ -23,8 +23,15 @@ class SDBG {
   SDBG() = default;
   ~SDBG() = default;
 
-  void LoadFromFile(const char *dbg_name, int num_thread) {
+  void LoadFromFile(const char *dbg_name, int num_thread, MPIEnviroment &mpienv) {
     LoadSdbgRawContent(&content_, dbg_name, num_thread);
+
+    // if (mpienv.rank == 0) {
+    //   content_.w.debug_print();
+    // }
+    // MPI_Barrier(MPI_COMM_WORLD); // Barrier before graph cleaning
+    // exit(0);
+    
     k_ = content_.meta.k();
     rs_is_tip_.from_packed_array(content_.tip.data(),
                                  content_.meta.item_count());

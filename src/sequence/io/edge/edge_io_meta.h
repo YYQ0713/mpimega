@@ -25,6 +25,7 @@ struct EdgeIoMetadata {
   //std::vector<EdgeIoBucketInfo> buckets_reduce;
 
   void Serialize(std::ofstream &os, MPIEnviroment &mpienv) {
+  // void Serialize(std::ofstream &os) {
     if (is_sorted) {
       num_edges = 0;
       for (const auto &b : buckets) {
@@ -35,6 +36,7 @@ struct EdgeIoMetadata {
     os << "kmer_size " << kmer_size << '\n'
        << "words_per_edge " << words_per_edge << '\n'
        << "num_files " << num_files * mpienv.nprocs << '\n'
+      //  << "num_files " << num_files << '\n'
        << "num_buckets " << buckets.size() << '\n'
        << "num_edges " << num_edges << '\n'
        << "is_sorted " << is_sorted << '\n';

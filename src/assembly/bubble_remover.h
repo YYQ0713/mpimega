@@ -38,7 +38,8 @@ class BaseBubbleRemover {
                          const checker_type &checker, int rank);
   int SearchAndPopBubble(UnitigGraph &graph,
                          UnitigGraph::VertexAdapter &adapter, uint32_t max_len,
-                         const checker_type &checker, kmlib::AtomicBitVector<uint8_t> &to_delete);
+                         const checker_type &checker, kmlib::AtomicBitVector<uint8_t> &to_delete,
+                         kmlib::AtomicBitVector<uint8_t> &careful_bubbleid, int rank);
 };
 
 class NaiveBubbleRemover : public BaseBubbleRemover {

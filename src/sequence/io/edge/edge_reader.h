@@ -20,6 +20,12 @@ class EdgeReader : public BaseSequenceReader {
     metadata_.Deserialize(is);
     InitFiles();
   }
+  EdgeReader(const std::string &file_prefix) {
+    file_prefix_ = file_prefix;
+    std::ifstream is(file_prefix + ".edges.info");
+    metadata_.Deserialize(is);
+    InitFiles();
+  }
   ~EdgeReader() {
     if (mpi_file_opened_) {
       MPI_File_close(&mpi_file_);
@@ -92,15 +98,8 @@ class EdgeReader : public BaseSequenceReader {
     assert(!is_opened_);
     buffer_.resize(metadata_.words_per_edge);
 
-    //for (unsigned i = 0; i < metadata_.num_files; ++i) {
-    //  in_streams_.emplace_back(
-    //      new std::ifstream(file_prefix_ + ".edges." + std::to_string(i),
-    //                        std::ifstream::binary | std::ifstream::in));
-    //}
-
     unsigned t = metadata_.num_files / mpienv_.nprocs;
     unsigned files_rem = metadata_.num_files % mpienv_.nprocs;
-    assert(files_rem == 0);
 
     if (metadata_.is_sorted) {
       for (unsigned i = 0; i < mpienv_.nprocs; i++) {
@@ -110,6 +109,11 @@ class EdgeReader : public BaseSequenceReader {
                                 std::ifstream::binary | std::ifstream::in));
         }
       }
+      // for (unsigned i = 0; i < metadata_.num_files; ++i) {
+      //   in_streams_.emplace_back(
+      //       new std::ifstream(file_prefix_ + ".edges." + std::to_string(i),
+      //                         std::ifstream::binary | std::ifstream::in));
+      // }
     } else {
       std::string filename = file_prefix_ + ".rank.0.edges.0";
       int ret = MPI_File_open(MPI_COMM_WORLD, filename.c_str(), MPI_MODE_RDONLY, MPI_INFO_NULL, &mpi_file_);
@@ -121,16 +125,6 @@ class EdgeReader : public BaseSequenceReader {
       }
     }
     
-
-    // for (unsigned i = 0; i < mpienv_.nprocs; i++) {
-    //   for (unsigned j = 0; j < t; j++) {
-    //     in_streams_.emplace_back(
-    //         new std::ifstream(file_prefix_ + ".rank." + std::to_string(i) + ".edges." + std::to_string(j),
-    //                           std::ifstream::binary | std::ifstream::in));
-    //   }
-    // }
-    
-
     cur_cnt_ = 0;
     cur_vol_ = 0;
     cur_bucket_ = -1;
