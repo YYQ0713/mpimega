@@ -21,6 +21,10 @@ class BaseBubbleRemover {
     bubble_file_ = bubble_file;
     return *this;
   }
+  BaseBubbleRemover &SetWriterMpi(MPIContigWriter *bubble_file) {
+    mpi_bubble_file_ = bubble_file;
+    return *this;
+  }
   BaseBubbleRemover &SetCarefulThreshold(double threshold) {
     careful_threshold_ = threshold;
     return *this;
@@ -28,6 +32,7 @@ class BaseBubbleRemover {
 
  private:
   ContigWriter *bubble_file_{};
+  MPIContigWriter *mpi_bubble_file_{};
   double careful_threshold_{1 + 1e-3};
 
  protected:

@@ -15,6 +15,7 @@
 #include "sparsepp/spp.h"
 #include "libbloom/bloom.h"
 #include "sequence/io/edge/edge_writer.h"
+#include <omp.h>
 
 template <class KmerType>
 class ContigFlankIndex {
@@ -31,57 +32,102 @@ class ContigFlankIndex {
 
  public:
   ContigFlankIndex(unsigned k, unsigned step) : k_(k), step_(step) {}
+  ContigFlankIndex(unsigned k, unsigned step, unsigned num_threads) : k_(k), step_(step) { local_index_.resize(num_threads); } // use sub hashset
   size_t size() const { return hash_index_.size(); }
 
   void FeedBatchContigs(SeqPackage &seq_pkg, const std::vector<float> &mul) {
     SpinLock lock;
-#pragma omp parallel for
-    for (size_t i = 0; i < seq_pkg.seq_count(); ++i) {
-      auto seq_view = seq_pkg.GetSeqView(i);
-      size_t seq_len = seq_view.length();
-      if (seq_len < k_ + 1) {
-        continue;
-      }
-      for (int strand = 0; strand < 2; ++strand) {
-        auto get_jth_char = [&seq_view, strand,
-                             seq_len](unsigned j) -> uint8_t {
-          uint8_t c = seq_view.base_at(strand == 0 ? j : (seq_len - 1 - j));
-          return strand == 0 ? c : 3u ^ c;
-        };
 
-        KmerType kmer;
-        for (unsigned j = 0; j < k_ + 1; ++j) {
-          kmer.ShiftAppend(get_jth_char(j), k_ + 1);
-        }
-        if (kmer.IsPalindrome(k_ + 1)) {
+#pragma omp parallel
+    {
+      int tid = omp_get_thread_num();
+      auto &lindex = local_index_[tid];
+  #pragma omp for
+      for (size_t i = 0; i < seq_pkg.seq_count(); ++i) {
+        auto seq_view = seq_pkg.GetSeqView(i);
+        size_t seq_len = seq_view.length();
+        if (seq_len < k_ + 1) {
           continue;
         }
+        for (int strand = 0; strand < 2; ++strand) {
+          auto get_jth_char = [&seq_view, strand,
+                               seq_len](unsigned j) -> uint8_t {
+            uint8_t c = seq_view.base_at(strand == 0 ? j : (seq_len - 1 - j));
+            return strand == 0 ? c : 3u ^ c;
+          };
+  
+          KmerType kmer;
+          for (unsigned j = 0; j < k_ + 1; ++j) {
+            kmer.ShiftAppend(get_jth_char(j), k_ + 1);
+          }
+          if (kmer.IsPalindrome(k_ + 1)) {
+            continue;
+          }
+  
+          unsigned ext_len =
+              std::min(static_cast<size_t>(step_ - 1), seq_len - (k_ + 1));
+          uint64_t ext_seq = 0;
+          for (unsigned j = 0; j < ext_len; ++j) {
+            ext_seq |= uint64_t(get_jth_char(k_ + 1 + j)) << j * 2;
+          }
+  
+          // {
+          //   std::lock_guard<SpinLock> lk(lock);
+          //   auto res = hash_index_.emplace(kmer, FlankInfo{ext_seq, ext_len});
+          //   if (!res.second) {
+          //     auto old_len = res.first->aux.ext_len;
+          //     auto old_seq = res.first->aux.ext_seq;
+          //     if (old_len < ext_len ||
+          //         (old_len == ext_len && old_seq < ext_seq)) {
+          //       hash_index_.erase(res.first);
+          //       res = hash_index_.emplace(kmer, FlankInfo{ext_seq, ext_len});
+          //       assert(res.second);
+          //     }
+          //   }
+          // }
 
-        unsigned ext_len =
-            std::min(static_cast<size_t>(step_ - 1), seq_len - (k_ + 1));
-        uint64_t ext_seq = 0;
-        for (unsigned j = 0; j < ext_len; ++j) {
-          ext_seq |= uint64_t(get_jth_char(k_ + 1 + j)) << j * 2;
-        }
-
-        {
-          std::lock_guard<SpinLock> lk(lock);
-          auto res = hash_index_.emplace(kmer, FlankInfo{ext_seq, ext_len});
+          auto res = lindex.emplace(kmer, FlankInfo{ext_seq, ext_len});
           if (!res.second) {
             auto old_len = res.first->aux.ext_len;
             auto old_seq = res.first->aux.ext_seq;
             if (old_len < ext_len ||
                 (old_len == ext_len && old_seq < ext_seq)) {
-              hash_index_.erase(res.first);
-              res = hash_index_.emplace(kmer, FlankInfo{ext_seq, ext_len});
+              lindex.erase(res.first);
+              res = lindex.emplace(kmer, FlankInfo{ext_seq, ext_len});
               assert(res.second);
             }
           }
-        }
-        if (seq_len == k_ + 1) {
-          break;
+
+          if (seq_len == k_ + 1) {
+            break;
+          }
         }
       }
+    }
+
+    size_t n_actual = 0;
+    for (auto &lindex : local_index_)
+      n_actual += lindex.size();
+
+    hash_index_.reserve(n_actual);
+    
+    //Merge sub local_index
+    for (auto &lindex : local_index_) {
+      for (auto &item : lindex) {
+        auto res = hash_index_.emplace(item);
+        if (!res.second) {
+          auto old_len = res.first->aux.ext_len;
+          auto old_seq = res.first->aux.ext_seq;
+          if (old_len < item.aux.ext_len ||
+              (old_len == item.aux.ext_len && old_seq < item.aux.ext_seq)) {
+            hash_index_.erase(res.first);
+            res = hash_index_.emplace(item);
+            assert(res.second);
+          }
+        }
+      }
+      lindex.clear();
+      lindex.rehash(0);
     }
   }
 
@@ -246,6 +292,7 @@ class ContigFlankIndex {
   }
  private:
   HashSet hash_index_;
+  std::vector<HashSet> local_index_;
   unsigned k_{};
   unsigned step_{};
 };

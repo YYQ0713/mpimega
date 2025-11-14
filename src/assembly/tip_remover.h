@@ -11,6 +11,7 @@
 class UnitigGraph;
 
 uint32_t RemoveTips(UnitigGraph &graph, uint32_t max_tip_len);
+uint32_t RemoveTips(UnitigGraph &graph, uint32_t max_tip_len, MPIEnviroment &mpienv);
 
 
 #endif  // MEGAHIT_TIP_REMOVER_H

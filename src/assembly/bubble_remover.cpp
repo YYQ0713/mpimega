@@ -199,7 +199,7 @@ int BaseBubbleRemover::SearchAndPopBubble(UnitigGraph &graph,
     //assert(success || adapter.canonical_id() == right.canonical_id() ||
     //       adapter.IsPalindrome());
     num_removed += 1;
-    if (bubble_file_ && middle[j].GetAvgDepth() >=
+    if (mpi_bubble_file_ && middle[j].GetAvgDepth() >=
                             middle[0].GetAvgDepth() * careful_threshold_) {
       // std::string label = graph.VertexToDNAString(middle[j]);
       // bubble_file_->WriteContig(label, graph.k(), 0, 0,
@@ -254,17 +254,24 @@ size_t BaseBubbleRemover::PopBubbles(UnitigGraph &graph, bool permanent_rm,
     }
   }
 
-  if (mpienv.rank == 0) {
-    #pragma omp parallel for
-      for (size_t i = 0; i < graph.size(); i++) {
-        if (careful_bubble_.at(i)) {
-          UnitigGraph::VertexAdapter adapter = graph.MakeVertexAdapter(i);
-          std::string label = graph.VertexToDNAString(adapter);
-
-          bubble_file_->WriteContig(label, graph.k(), 0, 0,
-                                    adapter.GetAvgDepth());
-        }
+  if (mpi_bubble_file_ != nullptr) {
+  #pragma omp parallel for
+    for (size_t i = mpienv.rank; i < graph.size(); i += mpienv.nprocs) {
+      if (careful_bubble_.at(i)) {
+        UnitigGraph::VertexAdapter adapter = graph.MakeVertexAdapter(i);
+        std::string label = graph.VertexToDNAString(adapter);
+  
+        mpi_bubble_file_->WriteContig(label, graph.k(), 0, 0,
+                                  adapter.GetAvgDepth());
       }
+  
+      if (omp_get_thread_num() == 0 && mpi_bubble_file_->check_buf()) {
+        mpi_bubble_file_->MPIFileWrite();
+      }
+    }
+    //clean buffer && allreduce
+    mpi_bubble_file_->MPIFileWrite();
+    mpi_bubble_file_->allreduce();
   }
 
   graph.Refresh(!permanent_rm);

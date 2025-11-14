@@ -302,7 +302,8 @@ struct Runner : public BaseRunner {
   ~Runner() override = default;
   void Run(const IterOption &opt, MPIEnviroment &mpienv) override {
     xinfo("Selected kmer type size for k: {}\n", sizeof(KmerType));
-    ContigFlankIndex<KmerType> index(opt.kmer_k, opt.step);
+    // ContigFlankIndex<KmerType> index(opt.kmer_k, opt.step);
+    ContigFlankIndex<KmerType> index(opt.kmer_k, opt.step, opt.num_cpu_threads);
     ReadContigsAndBuildIndex(opt, opt.contig_file, &index, mpienv);
     ReadContigsAndBuildIndex(opt, opt.bubble_file, &index, mpienv);
     ReadReadsAndProcess(opt, index, mpienv);
