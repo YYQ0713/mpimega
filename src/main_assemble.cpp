@@ -297,30 +297,22 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
   xinfo("unitig graph size: {}, time for building: {.3}\n", graph.size(),
   timer.elapsed());
 
-  // ContigWriter contig_writer(opt.contig_file(), mpienv.rank);
-  // ContigWriter standalone_writer(opt.standalone_file(), mpienv.rank);
-  // if (mpienv.rank == 0) {
-  //   OutputContigs(graph, &contig_writer, opt.output_standalone ? &standalone_writer : nullptr, false, opt.min_standalone); // test
-  // }
-  // MPI_Barrier(MPI_COMM_WORLD); // Barrier before graph cleaning
-  // exit(0);
-
   //CalcAndPrintStat(graph);
   xinfo("sizeof(UnitigGraphVertex): {}\n", sizeof(UnitigGraphVertex));
 
   // set up bubble
   ContigWriter bubble_writer(opt.bubble_file(), mpienv.rank);
-  MPIContigWriter mpi_bubble_writer(opt.bubble_file(), mpienv.rank);
+  // MPIContigWriter mpi_bubble_writer(opt.bubble_file(), mpienv.rank);
   NaiveBubbleRemover naiver_bubble_remover;
   ComplexBubbleRemover complex_bubble_remover;
   complex_bubble_remover.SetMergeSimilarity(opt.merge_similar)
       .SetMergeLevel(opt.merge_len);
   Histgram<int64_t> bubble_hist;
   if (opt.careful_bubble) {
-    // naiver_bubble_remover.SetCarefulThreshold(0.2).SetWriter(&bubble_writer);
-    // complex_bubble_remover.SetCarefulThreshold(0.2).SetWriter(&bubble_writer);
-    naiver_bubble_remover.SetCarefulThreshold(0.2).SetWriterMpi(&mpi_bubble_writer);
-    complex_bubble_remover.SetCarefulThreshold(0.2).SetWriterMpi(&mpi_bubble_writer);
+    naiver_bubble_remover.SetCarefulThreshold(0.2).SetWriter(&bubble_writer);
+    complex_bubble_remover.SetCarefulThreshold(0.2).SetWriter(&bubble_writer);
+    // naiver_bubble_remover.SetCarefulThreshold(0.2).SetWriterMpi(&mpi_bubble_writer);
+    // complex_bubble_remover.SetCarefulThreshold(0.2).SetWriterMpi(&mpi_bubble_writer);
   }
 
   MPI_Barrier(MPI_COMM_WORLD); // Barrier before graph cleaning
@@ -439,8 +431,8 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
 
     uint32_t n_bubbles = 0;
     if (opt.bubble_level >= 2 && opt.merge_len > 0) {
-      // complex_bubble_remover.SetWriter(nullptr);
-      complex_bubble_remover.SetWriterMpi(nullptr);
+      complex_bubble_remover.SetWriter(nullptr);
+      // complex_bubble_remover.SetWriterMpi(nullptr);
       n_bubbles = complex_bubble_remover.PopBubbles(graph, false, mpienv);
       timer.stop();
     }
@@ -454,17 +446,20 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
     
     timer.reset();
     timer.start();
-    if (!opt.is_final_round) {
-      // OutputContigs(graph, &addi_contig_writer, nullptr, true, 0);
-      MPIOutputContigs(graph, &mpi_addi_contig_writer, nullptr, true, 0, mpienv);
-    } else {
-      // OutputContigs(graph, &contig_writer,
-      //              opt.output_standalone ? &standalone_writer : nullptr, false,
-      //              opt.min_standalone);
-      MPIOutputContigs(graph, &mpi_contig_writer,
-                    opt.output_standalone ? &mpi_standalone_writer : nullptr, false,
-                    opt.min_standalone, mpienv);
-    }
+    // if (mpienv.rank == 0){
+      if (!opt.is_final_round) {
+        // OutputContigs(graph, &addi_contig_writer, nullptr, true, 0);
+        MPIOutputContigs(graph, &mpi_addi_contig_writer, nullptr, true, 0, mpienv);
+      } else {
+        // OutputContigs(graph, &contig_writer,
+        //             opt.output_standalone ? &standalone_writer : nullptr, false,
+        //             opt.min_standalone);
+        MPIOutputContigs(graph, &mpi_contig_writer,
+                      opt.output_standalone ? &mpi_standalone_writer : nullptr, false,
+                      opt.min_standalone, mpienv);
+      }
+    // }
+    MPI_Barrier(MPI_COMM_WORLD); // Barrier before graph cleaning
     timer.stop();
     xinfo("Time to output after local low depth unitigs removed: {}\n", timer.elapsed());
 

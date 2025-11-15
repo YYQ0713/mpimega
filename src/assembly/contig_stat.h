@@ -91,10 +91,10 @@ inline ContigStat CalcAndPrintStatMPI(UnitigGraph &graph, MPIEnviroment &mpienv,
     xinfo("");
     xinfoc("{s}: {}, {s}: {}, {s}: {}, {s}: {}, {s}: {}, {s}: {}, {s}", "Max", max
                                                                       , "Min", min
-                                                                      , "total size", total_size
                                                                       , "number contigs", num_contigs
+                                                                      , "number isolated", n_isolated
                                                                       , "number looped", n_looped
-                                                                      , "number isolated", n_isolated, "\n");
+                                                                      , "total size", total_size, "\n");
   }
   return stat;
 }
