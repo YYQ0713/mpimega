@@ -396,32 +396,32 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
   //ContigStat stat = CalcAndPrintStat(graph);
   
   // output contigs
-  // ContigWriter contig_writer(opt.contig_file(), mpienv.rank);
-  // ContigWriter standalone_writer(opt.standalone_file(), mpienv.rank);
-  MPIContigWriter mpi_contig_writer(opt.contig_file(), mpienv.rank);
-  MPIContigWriter mpi_standalone_writer(opt.standalone_file(), mpienv.rank);
+  ContigWriter contig_writer(opt.contig_file(), mpienv.rank);
+  ContigWriter standalone_writer(opt.standalone_file(), mpienv.rank);
+  // MPIContigWriter mpi_contig_writer(opt.contig_file(), mpienv.rank);
+  // MPIContigWriter mpi_standalone_writer(opt.standalone_file(), mpienv.rank);
 
-  // if (mpienv.rank == 0) {
+  if (mpienv.rank == 0) {
     if (!(opt.is_final_round &&
           opt.prune_level >=
               1)) {  // otherwise output after local low depth pruning
       timer.reset();
       timer.start();
-      // OutputContigs(graph, &contig_writer,
-      //              opt.output_standalone ? &standalone_writer : nullptr, false,
-      //              opt.min_standalone);
-      MPIOutputContigs(graph, &mpi_contig_writer,
-                    opt.output_standalone ? &mpi_standalone_writer : nullptr, false,
-                    opt.min_standalone, mpienv);
+      OutputContigs(graph, &contig_writer,
+                   opt.output_standalone ? &standalone_writer : nullptr, false,
+                   opt.min_standalone);
+      // MPIOutputContigs(graph, &mpi_contig_writer,
+      //               opt.output_standalone ? &mpi_standalone_writer : nullptr, false,
+      //               opt.min_standalone, mpienv);
       timer.stop();
       xinfo("Time to output: {}\n", timer.elapsed());
     }
-  // }
-
+  }
+  MPI_Barrier(MPI_COMM_WORLD); // Barrier
   // remove local low depth & output as contigs
   if (opt.prune_level >= 1) {
-    // ContigWriter addi_contig_writer(opt.addi_contig_file(), mpienv.rank);
-    MPIContigWriter mpi_addi_contig_writer(opt.addi_contig_file(), mpienv.rank);
+    ContigWriter addi_contig_writer(opt.addi_contig_file(), mpienv.rank);
+    // MPIContigWriter mpi_addi_contig_writer(opt.addi_contig_file(), mpienv.rank);
 
     timer.reset();
     timer.start();
@@ -446,20 +446,20 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
     
     timer.reset();
     timer.start();
-    // if (mpienv.rank == 0){
+    if (mpienv.rank == 0){
       if (!opt.is_final_round) {
-        // OutputContigs(graph, &addi_contig_writer, nullptr, true, 0);
-        MPIOutputContigs(graph, &mpi_addi_contig_writer, nullptr, true, 0, mpienv);
+        OutputContigs(graph, &addi_contig_writer, nullptr, true, 0);
+        // MPIOutputContigs(graph, &mpi_addi_contig_writer, nullptr, true, 0, mpienv);
       } else {
-        // OutputContigs(graph, &contig_writer,
-        //             opt.output_standalone ? &standalone_writer : nullptr, false,
-        //             opt.min_standalone);
-        MPIOutputContigs(graph, &mpi_contig_writer,
-                      opt.output_standalone ? &mpi_standalone_writer : nullptr, false,
-                      opt.min_standalone, mpienv);
+        OutputContigs(graph, &contig_writer,
+                    opt.output_standalone ? &standalone_writer : nullptr, false,
+                    opt.min_standalone);
+        // MPIOutputContigs(graph, &mpi_contig_writer,
+        //               opt.output_standalone ? &mpi_standalone_writer : nullptr, false,
+        //               opt.min_standalone, mpienv);
       }
-    // }
-    MPI_Barrier(MPI_COMM_WORLD); // Barrier before graph cleaning
+    }
+    MPI_Barrier(MPI_COMM_WORLD); // Barrier
     timer.stop();
     xinfo("Time to output after local low depth unitigs removed: {}\n", timer.elapsed());
 

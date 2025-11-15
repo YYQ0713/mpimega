@@ -1049,7 +1049,7 @@ int main(int argc, char **argv) {
     setup_logger(opt);
     
     check_and_correct_option(opt);
-
+    
     if (opt.mpienv_.rank == 0) {
         create_library_file(opt);
         build_library(opt);
@@ -1058,7 +1058,10 @@ int main(int argc, char **argv) {
     MPI_Barrier(MPI_COMM_WORLD); // Barrier
     size_t vmrss_kb = getCurrentRSS_kb();
     xinfo("before build_first_graph currentRSS: {} KB\n", vmrss_kb);
-    build_first_graph(opt);
+
+    if (opt.mpienv_.rank == 0) {
+        build_first_graph(opt);
+    }
 
     MPI_Barrier(MPI_COMM_WORLD); // Barrier
     assemble(opt, opt.k_min);
@@ -1078,7 +1081,9 @@ int main(int argc, char **argv) {
         
         iterate(opt, cur_k, k_step);
         MPI_Barrier(MPI_COMM_WORLD);
-        build_graph(opt, next_k, cur_k);
+        if (opt.mpienv_.rank == 0) {
+            build_graph(opt, next_k, cur_k);
+        }
         MPI_Barrier(MPI_COMM_WORLD);
         assemble(opt, next_k);
         cur_k = next_k;

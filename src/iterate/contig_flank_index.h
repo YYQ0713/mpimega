@@ -103,7 +103,7 @@ class ContigFlankIndex {
           }
         }
       }
-    }
+    } // pragma
 
     size_t n_actual = 0;
     for (auto &lindex : local_index_)

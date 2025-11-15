@@ -49,10 +49,12 @@ void LoadSdbgRawContent(SdbgRawContent *raw_content,
       }
       file_offset = 0;
       assert(in.read<char>(nullptr) == 0);
-      is.open((file_prefix + ".rank." + std::to_string(bucket_it->file_id / num_thread) + ".sdbg." + std::to_string(bucket_it->file_id % num_thread))
-                  .c_str());
+      // is.open((file_prefix + ".rank." + std::to_string(bucket_it->file_id / num_thread) + ".sdbg." + std::to_string(bucket_it->file_id % num_thread))
+      //             .c_str());
       // is.open((file_prefix + ".sdbg." + std::to_string(bucket_it->file_id))
       //             .c_str());
+      is.open((file_prefix + ".rank.0" + ".sdbg." + std::to_string(bucket_it->file_id))
+                  .c_str());
       in.reset(&is);
       last_file_id = bucket_it->file_id;
     }

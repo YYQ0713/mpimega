@@ -65,9 +65,12 @@ void BaseSequenceSortingEngine::AdjustMemory() {
 
   // if (mpienv_.rank == 0)
   // {
-    lv1_start_bucket_vec = std::vector<uint32_t>(mpienv_.nprocs, 0x00000000U);
-    lv1_end_bucket_vec = std::vector<uint32_t>(mpienv_.nprocs, 0x00000000U);
-    int64_t target_per_process = total_bucket_size / mpienv_.nprocs;
+    // lv1_start_bucket_vec = std::vector<uint32_t>(mpienv_.nprocs, 0x00000000U);
+    // lv1_end_bucket_vec = std::vector<uint32_t>(mpienv_.nprocs, 0x00000000U);
+    // int64_t target_per_process = total_bucket_size / mpienv_.nprocs;
+    lv1_start_bucket_vec = std::vector<uint32_t>(1, 0x00000000U);
+    lv1_end_bucket_vec = std::vector<uint32_t>(1, 0x00000000U);
+    int64_t target_per_process = total_bucket_size / 1;
 
     int64_t current_sum = 0;
     uint32_t current_process = 0;

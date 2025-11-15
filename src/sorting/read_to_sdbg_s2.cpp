@@ -134,10 +134,12 @@ Read2SdbgS2::MemoryStat Read2SdbgS2::Initialize() {
   AtomicBitVector read_marker;
   read_marker.reset(seq_pkg_->package.seq_count());
 
-  for (int fid = 0; fid < seq_pkg_->n_mercy_files * mpienv_.nprocs; ++fid) {
-    int rank = fid / mpienv_.nprocs;
-    int id = fid % mpienv_.nprocs;
-    auto file_name = opt_.output_prefix + ".mercy_cand." + std::to_string(id) + ".rank." + std::to_string(rank);
+  // for (int fid = 0; fid < seq_pkg_->n_mercy_files * mpienv_.nprocs; ++fid) {
+  for (int fid = 0; fid < seq_pkg_->n_mercy_files; ++fid) {
+    // int rank = fid / mpienv_.nprocs;
+    // int id = fid % mpienv_.nprocs;
+    // auto file_name = opt_.output_prefix + ".mercy_cand." + std::to_string(id) + ".rank." + std::to_string(rank);
+    auto file_name = opt_.output_prefix + ".mercy_cand." + std::to_string(fid);
     std::ifstream mercy_file(file_name,
                              std::ifstream::binary | std::ifstream::in);
     mercy_cand.clear();
@@ -695,24 +697,24 @@ namespace {
   
 void Read2SdbgS2::Lv0Postprocess() {
 
-  MPI_Datatype mpi_sdbg_bucket_record = create_sdbg_bucket_record_type();
-  MPI_Op bucket_rec_reduce_op;
-  MPI_Op_create(sdbg_bucket_record_reduce_op, 1, &bucket_rec_reduce_op);
+  // MPI_Datatype mpi_sdbg_bucket_record = create_sdbg_bucket_record_type();
+  // MPI_Op bucket_rec_reduce_op;
+  // MPI_Op_create(sdbg_bucket_record_reduce_op, 1, &bucket_rec_reduce_op);
 
   double start_time, end_time;
 
-  MPI_Barrier(MPI_COMM_WORLD); // 确保所有进程同步
-  start_time = MPI_Wtime();
+  // MPI_Barrier(MPI_COMM_WORLD); // 确保所有进程同步
+  // start_time = MPI_Wtime();
 
-  if (mpienv_.rank == 0) {
-    MPI_CHECK(MPI_Reduce(MPI_IN_PLACE, sdbg_writer_.bucket_rec_.data(),
-    sdbg_writer_.bucket_rec_.size(), mpi_sdbg_bucket_record, bucket_rec_reduce_op, 0, MPI_COMM_WORLD));
-  } else {
-    MPI_CHECK(MPI_Reduce(sdbg_writer_.bucket_rec_.data(), NULL,
-    sdbg_writer_.bucket_rec_.size(), mpi_sdbg_bucket_record, bucket_rec_reduce_op, 0, MPI_COMM_WORLD));
-  }
+  // if (mpienv_.rank == 0) {
+  //   MPI_CHECK(MPI_Reduce(MPI_IN_PLACE, sdbg_writer_.bucket_rec_.data(),
+  //   sdbg_writer_.bucket_rec_.size(), mpi_sdbg_bucket_record, bucket_rec_reduce_op, 0, MPI_COMM_WORLD));
+  // } else {
+  //   MPI_CHECK(MPI_Reduce(sdbg_writer_.bucket_rec_.data(), NULL,
+  //   sdbg_writer_.bucket_rec_.size(), mpi_sdbg_bucket_record, bucket_rec_reduce_op, 0, MPI_COMM_WORLD));
+  // }
 
-  end_time = MPI_Wtime();
+  // end_time = MPI_Wtime();
   double elapsed_time = end_time - start_time;
   xinfo("Process {}: MPI_Reduce took {} seconds\n", mpienv_.rank, elapsed_time);
 
@@ -733,6 +735,6 @@ void Read2SdbgS2::Lv0Postprocess() {
       sdbg_writer_.final_meta().tip_count());
   }
 
-  MPI_Op_free(&bucket_rec_reduce_op);
-  MPI_Type_free(&mpi_sdbg_bucket_record);
+  // MPI_Op_free(&bucket_rec_reduce_op);
+  // MPI_Type_free(&mpi_sdbg_bucket_record);
 }

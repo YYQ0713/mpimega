@@ -864,17 +864,17 @@ namespace {
   void SeqToSdbg::Lv0Postprocess() {
 
   // 创建自定义类型
-  MPI_Datatype mpi_sdbg_bucket_record = create_sdbg_bucket_record_type();
-  MPI_Op bucket_rec_reduce_op;
-  MPI_Op_create(sdbg_bucket_record_reduce_op, 1, &bucket_rec_reduce_op);
+  // MPI_Datatype mpi_sdbg_bucket_record = create_sdbg_bucket_record_type();
+  // MPI_Op bucket_rec_reduce_op;
+  // MPI_Op_create(sdbg_bucket_record_reduce_op, 1, &bucket_rec_reduce_op);
 
-  if (mpienv_.rank == 0) {
-    MPI_CHECK(MPI_Reduce(MPI_IN_PLACE, sdbg_writer_.bucket_rec_.data(),
-    sdbg_writer_.bucket_rec_.size(), mpi_sdbg_bucket_record, bucket_rec_reduce_op, 0, MPI_COMM_WORLD));
-  } else {
-    MPI_CHECK(MPI_Reduce(sdbg_writer_.bucket_rec_.data(), NULL,
-    sdbg_writer_.bucket_rec_.size(), mpi_sdbg_bucket_record, bucket_rec_reduce_op, 0, MPI_COMM_WORLD));
-  }
+  // if (mpienv_.rank == 0) {
+  //   MPI_CHECK(MPI_Reduce(MPI_IN_PLACE, sdbg_writer_.bucket_rec_.data(),
+  //   sdbg_writer_.bucket_rec_.size(), mpi_sdbg_bucket_record, bucket_rec_reduce_op, 0, MPI_COMM_WORLD));
+  // } else {
+  //   MPI_CHECK(MPI_Reduce(sdbg_writer_.bucket_rec_.data(), NULL,
+  //   sdbg_writer_.bucket_rec_.size(), mpi_sdbg_bucket_record, bucket_rec_reduce_op, 0, MPI_COMM_WORLD));
+  // }
 
   sdbg_writer_.Finalize(mpienv_);
 
@@ -897,6 +897,6 @@ namespace {
   }
 
   // 完成后释放自定义类型
-  MPI_Op_free(&bucket_rec_reduce_op);
-  MPI_Type_free(&mpi_sdbg_bucket_record);
+  // MPI_Op_free(&bucket_rec_reduce_op);
+  // MPI_Type_free(&mpi_sdbg_bucket_record);
 }

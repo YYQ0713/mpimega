@@ -211,9 +211,10 @@ class Histgram {
     size_ = 0;
   }
 
+ public:
+  // phmap::btree_map<value_type, size_t> map_{};
+  std::map<value_type, size_t> map_{}; // change by yyq
  private:
-  //std::map<value_type, size_t> map_{}; // change by yyq
-  phmap::btree_map<value_type, size_t> map_{};
   size_t size_{0}; 
   Mutex mutex_{};
 };
