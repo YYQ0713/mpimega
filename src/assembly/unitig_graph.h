@@ -39,6 +39,20 @@ class AsmOptions {
       string bubble_file() { return output_prefix + ".bubble_seq.fa"; }
 };
 
+struct VertexDTO {
+    uint64_t begin0;
+    uint64_t end0;
+    uint64_t begin1;
+    uint64_t end1;
+    uint32_t length;
+    uint64_t total_depth;
+    uint8_t is_looped;
+    // uint8_t is_palindrome;
+    // uint8_t is_changed;
+    // uint8_t flag;
+};
+
+
 class UnitigGraph {
  public:
   using Vertex = UnitigGraphVertex;
@@ -62,6 +76,8 @@ class UnitigGraph {
   void Mpi_Bcast_vertices();
   void UniGather();
   void RootBroadcast();
+  void DTO_encode();
+  void DTO_decode();
   void show_info(int rank);
   void vertices_resize(size_t size);
   void vertices_sort();
@@ -210,38 +226,8 @@ class UnitigGraph {
   //spp::sparse_hash_map<uint64_t, uint64_t> strand_map_;
   AdapterImpl<VertexAdapter> adapter_impl_;
   AdapterImpl<SudoVertexAdapter> sudo_adapter_impl_;
-  // rocksdb::DB* db_;
-  // rocksdb::Options options_;
-  // rocksdb::WriteOptions write_options_;
-  // std::string db_path_;
-};
+  std::vector<VertexDTO> dto_vec_;
 
-class PackedRecord {
-  public:
-    PackedRecord(uint32_t id_,
-                uint64_t ns, uint64_t ne,
-                uint64_t nrcs, uint64_t nrce,
-                uint64_t td, uint32_t len,
-                bool loop, bool change)
-        : new_start(ns), new_end(ne),
-          new_rc_start(nrcs), new_rc_end(nrce),
-          total_depth(td), id(id_), length(len),
-          flags((loop ? 1 : 0) | (change ? 2 : 0)) {}
-    // 用两个 64bit 的字段容纳 4 个 48bit 的成员（共 192bit）
-    uint64_t new_start   : 48;
-    uint64_t new_end     : 48;
-    uint64_t new_rc_start: 48;
-    uint64_t new_rc_end  : 48;
-
-    uint64_t total_depth;
-
-    uint32_t id;
-    uint32_t length;
-
-    uint8_t flags; // bit 0: is_loop, bit 1: is_change
-
-    bool is_loop()   const { return flags & 1; }
-    bool is_change() const { return flags & 2; }
 };
 
 #endif  // MEGAHIT_UNITIG_GRAPH_H

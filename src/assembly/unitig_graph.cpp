@@ -187,7 +187,7 @@ UnitigGraph::UnitigGraph(SDBG *sdbg, MPIEnviroment &mpienv)
         "you may increase the kmer size to remove tons of erroneous kmers.\n",
         vertices_.size(), kMaxNumVertices);
   }
-  //vertices_sort();
+  // vertices_sort();
   MPI_Barrier(MPI_COMM_WORLD);
 
   id_map_.reserve(vertices_.size() * 2 - count_palindrome);
@@ -401,163 +401,6 @@ void UnitigGraph::RefreshDisconnected() {
 }
 
 void UnitigGraph::Refresh(bool set_changed) {
-//   static const uint8_t kDeleted = 0x1;
-//   static const uint8_t kVisited = 0x2;
-//   RefreshDisconnected();
-// #pragma omp parallel for
-//   for (size_type i = 0; i < vertices_.size(); ++i) {
-//     auto adapter = MakeSudoAdapter(i);
-//     if (!adapter.IsToDelete()) {
-//       continue;
-//     }
-//     adapter.SetFlag(kDeleted);
-//     if (adapter.IsStandalone()) {
-//       continue;
-//     }
-//     for (int strand = 0; strand < 2; ++strand, adapter.ReverseComplement()) {
-//       uint64_t cur_edge = adapter.e();
-//       for (size_t j = 1; j < adapter.GetLength(); ++j) {
-//         auto prev = sdbg_->UniquePrevEdge(cur_edge);
-//         sdbg_->SetInvalidEdge(cur_edge);
-//         cur_edge = prev;
-//         assert(cur_edge != SDBG::kNullID);
-//       }
-//       assert(cur_edge == adapter.b());
-//       sdbg_->SetInvalidEdge(cur_edge);
-//       if (adapter.IsPalindrome()) {
-//         break;
-//       }
-//     }
-//   }
-
-//   AtomicBitVector locks(size());
-// #pragma omp parallel for
-//   for (size_type i = 0; i < vertices_.size(); ++i) {
-//     auto adapter = MakeSudoAdapter(i);
-//     if (adapter.IsStandalone() || (adapter.GetFlag() & kDeleted)) {
-//       continue;
-//     }
-//     for (int strand = 0; strand < 2; ++strand, adapter.ReverseComplement()) {
-//       if (PrevSimplePathAdapter(adapter).IsValid()) {
-//         continue;
-//       }
-//       if (!locks.try_lock(i)) {
-//         break;
-//       }
-//       std::vector<SudoVertexAdapter> linear_path;
-//       for (auto cur = NextSimplePathAdapter(adapter); cur.IsValid();
-//            cur = NextSimplePathAdapter(cur)) {
-//         linear_path.emplace_back(cur);
-//       }
-
-//       if (linear_path.empty()) {
-//         adapter.SetFlag(kVisited);
-//         break;
-//       }
-
-//       //size_type back_id = linear_path.back().UnitigId();
-//       //if (back_id != i && !locks.try_lock(back_id)) {
-//       //  if (back_id > i) {
-//       //    locks.unlock(i);
-//       //    break;
-//       //  } else {
-//       //    locks.lock(back_id);
-//       //  }
-//       //}
-//       size_type back_id = linear_path.back().UnitigId();
-//       if (back_id != i) {
-//         if (back_id < i) {
-//           locks.unlock(i);
-//           break;
-//         } else {
-//           locks.lock(back_id);
-//         }
-//       }
-
-//       auto new_length = adapter.GetLength();
-//       auto new_total_depth = adapter.GetTotalDepth();
-//       adapter.SetFlag(kVisited);
-
-//       for (auto &v : linear_path) {
-//         new_length += v.GetLength();
-//         new_total_depth += v.GetTotalDepth();
-//         if (v.canonical_id() != adapter.canonical_id()) v.SetFlag(kDeleted);
-//       }
-
-//       auto new_start = adapter.b();
-//       auto new_rc_end = adapter.re();
-//       auto new_rc_start = linear_path.back().rb();
-//       auto new_end = linear_path.back().e();
-
-//       adapter.SetBeginEnd(new_start, new_end, new_rc_start, new_rc_end);
-//       adapter.SetLength(new_length);
-//       adapter.SetTotalDepth(new_total_depth);
-//       if (set_changed) adapter.SetChanged();
-
-//       break;
-//     }
-//   }
-
-//   // looped path
-//   //std::mutex mutex;
-// //#pragma omp parallel for
-//   for (size_type i = 0; i < vertices_.size(); ++i) {
-//     auto adapter = MakeSudoAdapter(i);
-//     if (!adapter.IsStandalone() && !adapter.GetFlag()) {
-//       //std::lock_guard<std::mutex> lk(mutex);
-//       if (adapter.GetFlag()) {
-//         continue;
-//       }
-
-//       uint32_t length = adapter.GetLength();
-//       uint64_t total_depth = adapter.GetTotalDepth();
-//       SudoVertexAdapter next_adapter = adapter;
-//       while (true) {
-//         next_adapter = NextSimplePathAdapter(next_adapter);
-//         assert(next_adapter.IsValid());
-//         if (next_adapter.b() == adapter.b()) {
-//           break;
-//         }
-//         next_adapter.SetFlag(kDeleted);
-//         length += next_adapter.GetLength();
-//         total_depth += next_adapter.GetTotalDepth();
-//       }
-
-//       auto new_start = adapter.b();
-//       auto new_end = sdbg_->PrevSimplePathEdge(new_start);
-//       auto new_rc_end = adapter.re();
-//       auto new_rc_start = sdbg_->NextSimplePathEdge(new_rc_end);
-//       assert(new_start == sdbg_->EdgeReverseComplement(new_rc_end));
-//       assert(new_end == sdbg_->EdgeReverseComplement(new_rc_start));
-
-//       adapter.SetBeginEnd(new_start, new_end, new_rc_start, new_rc_end);
-//       adapter.SetLength(length);
-//       adapter.SetTotalDepth(total_depth);
-//       adapter.SetLooped();
-//       if (set_changed) adapter.SetChanged();
-//     }
-//   }
-
-//   vertices_.resize(std::remove_if(vertices_.begin(), vertices_.end(),
-//                                   [](UnitigGraphVertex &a) {
-//                                     return SudoVertexAdapter(a).GetFlag() &
-//                                            kDeleted;
-//                                   }) -
-//                    vertices_.begin());
-
-//   size_type num_changed = 0;
-// #pragma omp parallel for reduction(+ : num_changed)
-//   for (size_type i = 0; i < vertices_.size(); ++i) {
-//     auto adapter = MakeSudoAdapter(i);
-//     assert(adapter.IsStandalone() || adapter.GetFlag());
-//     adapter.SetFlag(0);
-//     id_map_.at(adapter.b()) = i;
-//     id_map_.at(adapter.rb()) = i;
-//     num_changed += adapter.IsChanged();
-//   }
-
-//******************************************************/
-
   static const uint8_t kDeleted = 0x1;
   static const uint8_t kVisited = 0x2;
   RefreshDisconnected();
@@ -612,9 +455,18 @@ void UnitigGraph::Refresh(bool set_changed) {
         break;
       }
 
+      //size_type back_id = linear_path.back().UnitigId();
+      //if (back_id != i && !locks.try_lock(back_id)) {
+      //  if (back_id > i) {
+      //    locks.unlock(i);
+      //    break;
+      //  } else {
+      //    locks.lock(back_id);
+      //  }
+      //}
       size_type back_id = linear_path.back().UnitigId();
-      if (back_id != i && !locks.try_lock(back_id)) {
-        if (back_id > i) {
+      if (back_id != i) {
+        if (back_id < i) {
           locks.unlock(i);
           break;
         } else {
@@ -641,17 +493,18 @@ void UnitigGraph::Refresh(bool set_changed) {
       adapter.SetLength(new_length);
       adapter.SetTotalDepth(new_total_depth);
       if (set_changed) adapter.SetChanged();
+
       break;
     }
   }
 
   // looped path
-  std::mutex mutex;
-#pragma omp parallel for
+  //std::mutex mutex;
+//#pragma omp parallel for
   for (size_type i = 0; i < vertices_.size(); ++i) {
     auto adapter = MakeSudoAdapter(i);
     if (!adapter.IsStandalone() && !adapter.GetFlag()) {
-      std::lock_guard<std::mutex> lk(mutex);
+      //std::lock_guard<std::mutex> lk(mutex);
       if (adapter.GetFlag()) {
         continue;
       }
@@ -702,6 +555,153 @@ void UnitigGraph::Refresh(bool set_changed) {
     id_map_.at(adapter.rb()) = i;
     num_changed += adapter.IsChanged();
   }
+
+//******************************************************/
+
+//   static const uint8_t kDeleted = 0x1;
+//   static const uint8_t kVisited = 0x2;
+//   RefreshDisconnected();
+// #pragma omp parallel for
+//   for (size_type i = 0; i < vertices_.size(); ++i) {
+//     auto adapter = MakeSudoAdapter(i);
+//     if (!adapter.IsToDelete()) {
+//       continue;
+//     }
+//     adapter.SetFlag(kDeleted);
+//     if (adapter.IsStandalone()) {
+//       continue;
+//     }
+//     for (int strand = 0; strand < 2; ++strand, adapter.ReverseComplement()) {
+//       uint64_t cur_edge = adapter.e();
+//       for (size_t j = 1; j < adapter.GetLength(); ++j) {
+//         auto prev = sdbg_->UniquePrevEdge(cur_edge);
+//         sdbg_->SetInvalidEdge(cur_edge);
+//         cur_edge = prev;
+//         assert(cur_edge != SDBG::kNullID);
+//       }
+//       assert(cur_edge == adapter.b());
+//       sdbg_->SetInvalidEdge(cur_edge);
+//       if (adapter.IsPalindrome()) {
+//         break;
+//       }
+//     }
+//   }
+
+//   AtomicBitVector locks(size());
+// #pragma omp parallel for
+//   for (size_type i = 0; i < vertices_.size(); ++i) {
+//     auto adapter = MakeSudoAdapter(i);
+//     if (adapter.IsStandalone() || (adapter.GetFlag() & kDeleted)) {
+//       continue;
+//     }
+//     for (int strand = 0; strand < 2; ++strand, adapter.ReverseComplement()) {
+//       if (PrevSimplePathAdapter(adapter).IsValid()) {
+//         continue;
+//       }
+//       if (!locks.try_lock(i)) {
+//         break;
+//       }
+//       std::vector<SudoVertexAdapter> linear_path;
+//       for (auto cur = NextSimplePathAdapter(adapter); cur.IsValid();
+//            cur = NextSimplePathAdapter(cur)) {
+//         linear_path.emplace_back(cur);
+//       }
+
+//       if (linear_path.empty()) {
+//         adapter.SetFlag(kVisited);
+//         break;
+//       }
+
+//       size_type back_id = linear_path.back().UnitigId();
+//       if (back_id != i && !locks.try_lock(back_id)) {
+//         if (back_id > i) {
+//           locks.unlock(i);
+//           break;
+//         } else {
+//           locks.lock(back_id);
+//         }
+//       }
+
+//       auto new_length = adapter.GetLength();
+//       auto new_total_depth = adapter.GetTotalDepth();
+//       adapter.SetFlag(kVisited);
+
+//       for (auto &v : linear_path) {
+//         new_length += v.GetLength();
+//         new_total_depth += v.GetTotalDepth();
+//         if (v.canonical_id() != adapter.canonical_id()) v.SetFlag(kDeleted);
+//       }
+
+//       auto new_start = adapter.b();
+//       auto new_rc_end = adapter.re();
+//       auto new_rc_start = linear_path.back().rb();
+//       auto new_end = linear_path.back().e();
+
+//       adapter.SetBeginEnd(new_start, new_end, new_rc_start, new_rc_end);
+//       adapter.SetLength(new_length);
+//       adapter.SetTotalDepth(new_total_depth);
+//       if (set_changed) adapter.SetChanged();
+//       break;
+//     }
+//   }
+
+//   // looped path
+//   std::mutex mutex;
+// #pragma omp parallel for
+//   for (size_type i = 0; i < vertices_.size(); ++i) {
+//     auto adapter = MakeSudoAdapter(i);
+//     if (!adapter.IsStandalone() && !adapter.GetFlag()) {
+//       std::lock_guard<std::mutex> lk(mutex);
+//       if (adapter.GetFlag()) {
+//         continue;
+//       }
+
+//       uint32_t length = adapter.GetLength();
+//       uint64_t total_depth = adapter.GetTotalDepth();
+//       SudoVertexAdapter next_adapter = adapter;
+//       while (true) {
+//         next_adapter = NextSimplePathAdapter(next_adapter);
+//         assert(next_adapter.IsValid());
+//         if (next_adapter.b() == adapter.b()) {
+//           break;
+//         }
+//         next_adapter.SetFlag(kDeleted);
+//         length += next_adapter.GetLength();
+//         total_depth += next_adapter.GetTotalDepth();
+//       }
+
+//       auto new_start = adapter.b();
+//       auto new_end = sdbg_->PrevSimplePathEdge(new_start);
+//       auto new_rc_end = adapter.re();
+//       auto new_rc_start = sdbg_->NextSimplePathEdge(new_rc_end);
+//       assert(new_start == sdbg_->EdgeReverseComplement(new_rc_end));
+//       assert(new_end == sdbg_->EdgeReverseComplement(new_rc_start));
+
+//       adapter.SetBeginEnd(new_start, new_end, new_rc_start, new_rc_end);
+//       adapter.SetLength(length);
+//       adapter.SetTotalDepth(total_depth);
+//       adapter.SetLooped();
+//       if (set_changed) adapter.SetChanged();
+//     }
+//   }
+
+//   vertices_.resize(std::remove_if(vertices_.begin(), vertices_.end(),
+//                                   [](UnitigGraphVertex &a) {
+//                                     return SudoVertexAdapter(a).GetFlag() &
+//                                            kDeleted;
+//                                   }) -
+//                    vertices_.begin());
+
+//   size_type num_changed = 0;
+// #pragma omp parallel for reduction(+ : num_changed)
+//   for (size_type i = 0; i < vertices_.size(); ++i) {
+//     auto adapter = MakeSudoAdapter(i);
+//     assert(adapter.IsStandalone() || adapter.GetFlag());
+//     adapter.SetFlag(0);
+//     id_map_.at(adapter.b()) = i;
+//     id_map_.at(adapter.rb()) = i;
+//     num_changed += adapter.IsChanged();
+//   }
 }
 
 std::string UnitigGraph::VertexToDNAString(VertexAdapter v) {
@@ -755,210 +755,376 @@ void UnitigGraph_Allreduce_Vertices_Op(void* invec, void* inoutvec, int* len, MP
   }
 }
 
-void UnitigGraph::Mpi_Allreduce_vertices() {
-  MPI_Datatype MPI_vertices;
+// void UnitigGraph::Mpi_Allreduce_vertices() {
+//   MPI_Datatype MPI_vertices;
   
-  // 定义每个字段的长度
-  const int kFieldCount = 7;
-  int block_lengths[kFieldCount] = {4, 1, 1, 1, 1, 1, 1};
+//   // 定义每个字段的长度
+//   const int kFieldCount = 7;
+//   int block_lengths[kFieldCount] = {4, 1, 1, 1, 1, 1, 1};
 
-  // 定义每个字段的偏移量
-  MPI_Aint displacements[kFieldCount];
-  displacements[0] = 0;
-  displacements[1] = 24;
-  displacements[2] = 32;
-  displacements[3] = 36;
-  displacements[4] = 37;
-  displacements[5] = 38;
-  displacements[6] = 39;
+//   // 定义每个字段的偏移量
+//   MPI_Aint displacements[kFieldCount];
+//   displacements[0] = 0;
+//   displacements[1] = 24;
+//   displacements[2] = 28;
+//   displacements[3] = 36;
+//   displacements[4] = 37;
+//   displacements[5] = 38;
+//   displacements[6] = 39;
 
-  // 定义每个字段的 MPI 数据类型
-  MPI_Datatype types[kFieldCount] = {
-    MPI_UINT64_T, // strand_info
-    MPI_UINT64_T, // total_depth
-    MPI_UINT32_T, // length
-    MPI_C_BOOL, // is_looped
-    MPI_C_BOOL, // is_palindrome
-    MPI_C_BOOL, // is_changed
-    MPI_UINT8_T, // flag
-  };
+//   // 定义每个字段的 MPI 数据类型
+//   MPI_Datatype types[kFieldCount] = {
+//     MPI_UINT64_T, // strand_info
+//     MPI_UINT32_T, // length
+//     MPI_UINT64_T, // total_depth
+//     MPI_C_BOOL, // is_looped
+//     MPI_C_BOOL, // is_palindrome
+//     MPI_C_BOOL, // is_changed
+//     MPI_UINT8_T, // flag
+//   };
 
-  // 创建自定义 MPI 类型
-  MPI_Type_create_struct(kFieldCount, block_lengths, displacements, types, &MPI_vertices);
-  MPI_Type_commit(&MPI_vertices);
-  MPI_Op Vertices_Ar_Op;
-  MPI_Op_create(UnitigGraph_Allreduce_Vertices_Op, 1, &Vertices_Ar_Op);
+//   // 创建自定义 MPI 类型
+//   MPI_Type_create_struct(kFieldCount, block_lengths, displacements, types, &MPI_vertices);
+//   MPI_Type_commit(&MPI_vertices);
+//   MPI_Op Vertices_Ar_Op;
+//   MPI_Op_create(UnitigGraph_Allreduce_Vertices_Op, 1, &Vertices_Ar_Op);
 
-  MPI_Allreduce(MPI_IN_PLACE, vertices_.data(), vertices_.size(), MPI_vertices, Vertices_Ar_Op, MPI_COMM_WORLD);
+//   MPI_Allreduce(MPI_IN_PLACE, vertices_.data(), vertices_.size(), MPI_vertices, Vertices_Ar_Op, MPI_COMM_WORLD);
 
-  MPI_Type_free(&MPI_vertices);
-  MPI_Op_free(&Vertices_Ar_Op);
+//   MPI_Type_free(&MPI_vertices);
+//   MPI_Op_free(&Vertices_Ar_Op);
+// }
+
+// void UnitigGraph::Mpi_Bcast_vertices() {
+//   MPI_Datatype MPI_vertices;
+  
+//   // 定义每个字段的长度
+//   const int kFieldCount = 7;
+//   int block_lengths[kFieldCount] = {4, 1, 1, 1, 1, 1, 1};
+
+//   // 定义每个字段的偏移量
+//   MPI_Aint displacements[kFieldCount];
+//   displacements[0] = 0;
+//   displacements[1] = 24;
+//   displacements[2] = 32;
+//   displacements[3] = 36;
+//   displacements[4] = 37;
+//   displacements[5] = 38;
+//   displacements[6] = 39;
+
+//   // 定义每个字段的 MPI 数据类型
+//   MPI_Datatype types[kFieldCount] = {
+//     MPI_UINT64_T, // strand_info
+//     MPI_UINT64_T, // total_depth
+//     MPI_UINT32_T, // length
+//     MPI_C_BOOL, // is_looped
+//     MPI_C_BOOL, // is_palindrome
+//     MPI_C_BOOL, // is_changed
+//     MPI_UINT8_T, // flag
+//   };
+
+//   // 创建自定义 MPI 类型
+//   MPI_Type_create_struct(kFieldCount, block_lengths, displacements, types, &MPI_vertices);
+//   MPI_Type_commit(&MPI_vertices);
+
+//   MPI_Bcast(vertices_.data(), vertices_.size(), MPI_vertices, 0, MPI_COMM_WORLD);
+
+//   MPI_Type_free(&MPI_vertices);
+// }
+void UnitigGraph::DTO_encode() {
+  dto_vec_.resize(vertices_.size());
+  for (size_t i = 0; i < vertices_.size(); i++) {
+    auto adapter = MakeSudoAdapter(i);
+    dto_vec_[i].begin0 = adapter.b();
+    dto_vec_[i].end0 = adapter.e();
+    dto_vec_[i].begin1 = adapter.rb();
+    dto_vec_[i].end1 = adapter.re();
+    dto_vec_[i].length = adapter.GetLength();
+    dto_vec_[i].total_depth = adapter.GetTotalDepth();
+    dto_vec_[i].is_looped = adapter.IsLoop();
+    // dto_vec_[i].is_changed = adapter.IsChanged();
+    // dto_vec_[i].is_palindrome = adapter.IsPalindrome();
+    // dto_vec_[i].flag = adapter.GetFlag();
+  }
 }
 
-void UnitigGraph::Mpi_Bcast_vertices() {
-  MPI_Datatype MPI_vertices;
-  
-  // 定义每个字段的长度
-  const int kFieldCount = 7;
-  int block_lengths[kFieldCount] = {4, 1, 1, 1, 1, 1, 1};
-
-  // 定义每个字段的偏移量
-  MPI_Aint displacements[kFieldCount];
-  displacements[0] = 0;
-  displacements[1] = 24;
-  displacements[2] = 32;
-  displacements[3] = 36;
-  displacements[4] = 37;
-  displacements[5] = 38;
-  displacements[6] = 39;
-
-  // 定义每个字段的 MPI 数据类型
-  MPI_Datatype types[kFieldCount] = {
-    MPI_UINT64_T, // strand_info
-    MPI_UINT64_T, // total_depth
-    MPI_UINT32_T, // length
-    MPI_C_BOOL, // is_looped
-    MPI_C_BOOL, // is_palindrome
-    MPI_C_BOOL, // is_changed
-    MPI_UINT8_T, // flag
-  };
-
-  // 创建自定义 MPI 类型
-  MPI_Type_create_struct(kFieldCount, block_lengths, displacements, types, &MPI_vertices);
-  MPI_Type_commit(&MPI_vertices);
-
-  MPI_Bcast(vertices_.data(), vertices_.size(), MPI_vertices, 0, MPI_COMM_WORLD);
-
-  MPI_Type_free(&MPI_vertices);
+void UnitigGraph::DTO_decode() {
+  vertices_.clear();
+  vertices_.reserve(dto_vec_.size());
+  for (size_t i = 0; i < dto_vec_.size(); i++) {
+    vertices_.emplace_back(dto_vec_[i].begin0, dto_vec_[i].end0, dto_vec_[i].begin1, dto_vec_[i].end1, dto_vec_[i].total_depth,
+                            dto_vec_[i].length, dto_vec_[i].is_looped);
+  }
 }
+
+// void UnitigGraph::DTO_decode() {
+//   vertices_.clear();
+//   vertices_.reserve(dto_vec_.size());
+
+//   for (size_t i = 0; i < dto_vec_.size(); i++) {
+
+//     // ====== 解决 packed field 不能绑定到引用问题 ======
+//     uint64_t begin0      = dto_vec_[i].begin0;
+//     uint64_t end0        = dto_vec_[i].end0;
+//     uint64_t begin1      = dto_vec_[i].begin1;
+//     uint64_t end1        = dto_vec_[i].end1;
+//     uint32_t length      = dto_vec_[i].length;
+//     uint64_t total_depth = dto_vec_[i].total_depth;
+//     bool is_looped       = dto_vec_[i].is_looped;
+
+//     vertices_.emplace_back(begin0, end0, begin1, end1,
+//                            total_depth, length, is_looped);
+//   }
+// }
+
+// void UnitigGraph::UniGather() {
+//   MPI_Datatype MPI_vertices;
+
+//   const int kFieldCount = 7;
+//   int block_lengths[kFieldCount] = {3, 1, 1, 1, 1, 1, 1};
+//   MPI_Aint displacements[kFieldCount];
+//   displacements[0] = 0;
+//   displacements[1] = 24;
+//   displacements[2] = 32;
+//   displacements[3] = 40;
+//   displacements[4] = 41;
+//   displacements[5] = 42;
+//   displacements[6] = 43;
+
+//   MPI_Datatype types[kFieldCount] = {
+//     MPI_UINT64_T,
+//     MPI_UINT32_T,
+//     MPI_UINT64_T,
+//     MPI_C_BOOL,
+//     MPI_C_BOOL,
+//     MPI_C_BOOL,
+//     MPI_UINT8_T,
+//   };
+
+//   MPI_Type_create_struct(kFieldCount, block_lengths, displacements, types, &MPI_vertices);
+//   MPI_Type_commit(&MPI_vertices);
+
+//   // Step 1: gather local sizes as MPI_Count
+//   uint32_t local_count = vertices_.size();
+//   std::vector<uint32_t> recv_counts(mpienv_.nprocs);
+//   std::vector<bool> ischunk(mpienv_.nprocs);
+//   int32_t CHUNK = INT_MAX;
+//   MPI_Allgather(&local_count, 1, MPI_UINT32_T, recv_counts.data(), 1, MPI_UINT32_T, MPI_COMM_WORLD);
+
+//   // Step 2: compute displacements
+//   std::vector<uint32_t> displs(mpienv_.nprocs, 0);
+//   uint32_t total_count = 0;
+//   for (int i = 0; i < mpienv_.nprocs; ++i) {
+//     displs[i] = total_count;
+//     total_count += recv_counts[i];
+//     if (recv_counts[i] > INT_MAX) ischunk[i] = true; 
+//   }
+
+
+//   // Step 3: resize root vertices_ to hold all gathered data
+//   if (mpienv_.rank == 0) {
+//     vertices_.resize(total_count);
+//     for (uint32_t i = 1; i < mpienv_.nprocs; ++i) {
+//       if (ischunk[i]) {
+//         for (uint32_t offset = 0; offset < recv_counts[i]; offset += CHUNK) {
+//           int32_t chunk_size = std::min(CHUNK, static_cast<int32_t>(recv_counts[i] - offset));
+//           MPI_Recv(vertices_.data() + displs[i] + offset, chunk_size, MPI_vertices, i, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+//         }
+//       } else {
+//         MPI_Recv(vertices_.data() + displs[i], recv_counts[i], MPI_vertices, i, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+//       }
+      
+//     }
+//   } else {
+//     // 非0号进程发送数据
+//     if (ischunk[mpienv_.rank]) {
+//       for (uint32_t offset = 0; offset < local_count; offset += CHUNK) {
+//         int32_t chunk_size = std::min(CHUNK, static_cast<int32_t>(local_count - offset));
+//         MPI_Send(vertices_.data() + offset, chunk_size, MPI_vertices, 0, 1, MPI_COMM_WORLD);
+//       }
+//     } else {
+//       MPI_Send(vertices_.data(), local_count, MPI_vertices, 0, 1, MPI_COMM_WORLD);
+//     }
+//     vertices_.resize(total_count);
+//   }
+
+//   for (uint32_t offset = 0; offset < total_count; offset += CHUNK) {
+//     int32_t chunk_size = std::min(CHUNK, static_cast<int32_t>(total_count - offset));
+//     MPI_Bcast(vertices_.data() + offset, chunk_size, MPI_vertices, 0, MPI_COMM_WORLD);
+//   }
+
+//   MPI_Type_free(&MPI_vertices);
+// }
 
 void UnitigGraph::UniGather() {
-  MPI_Datatype MPI_vertices;
+  // ================================================================
+  // Step 0: encode local vertices_ -> dto_vec_
+  // ================================================================
+  DTO_encode();    // 生成本地 dto_vec_
 
-  const int kFieldCount = 7;
-  int block_lengths[kFieldCount] = {3, 1, 1, 1, 1, 1, 1};
-  MPI_Aint displacements[kFieldCount];
-  displacements[0] = 0;
-  displacements[1] = 24;
-  displacements[2] = 32;
-  displacements[3] = 36;
-  displacements[4] = 37;
-  displacements[5] = 38;
-  displacements[6] = 39;
+  using DTO = VertexDTO;
 
-  MPI_Datatype types[kFieldCount] = {
-    MPI_UINT64_T,
-    MPI_UINT64_T,
-    MPI_UINT32_T,
-    MPI_C_BOOL,
-    MPI_C_BOOL,
-    MPI_C_BOOL,
-    MPI_UINT8_T,
-  };
+  // 定义 MPI datatype 对应 UnitigDTO
+  MPI_Datatype MPI_dto;
+  {
+    const int kFieldCount = 7;
+    int block_lengths[kFieldCount] = {1,1,1,1,1,1,1};
+    MPI_Aint displacements[kFieldCount];
 
-  MPI_Type_create_struct(kFieldCount, block_lengths, displacements, types, &MPI_vertices);
-  MPI_Type_commit(&MPI_vertices);
+    DTO tmp;
+    MPI_Aint base;
+    MPI_Get_address(&tmp, &base);
 
-  // Step 1: gather local sizes as MPI_Count
-  uint32_t local_count = vertices_.size();
+    MPI_Get_address(&tmp.begin0,      &displacements[0]);
+    MPI_Get_address(&tmp.end0,        &displacements[1]);
+    MPI_Get_address(&tmp.begin1,      &displacements[2]);
+    MPI_Get_address(&tmp.end1,        &displacements[3]);
+    MPI_Get_address(&tmp.length,      &displacements[4]);
+    MPI_Get_address(&tmp.total_depth, &displacements[5]);
+    MPI_Get_address(&tmp.is_looped,   &displacements[6]);
+
+    for (int i = 0; i < kFieldCount; i++)
+      displacements[i] -= base;
+
+    MPI_Datatype types[kFieldCount] = {
+      MPI_UINT64_T,
+      MPI_UINT64_T,
+      MPI_UINT64_T,
+      MPI_UINT64_T,
+      MPI_UINT32_T,
+      MPI_UINT64_T,
+      MPI_C_BOOL,
+    };
+
+    MPI_Type_create_struct(kFieldCount, block_lengths, displacements, types, &MPI_dto);
+    MPI_Type_commit(&MPI_dto);
+  }
+
+  // ================================================================
+  // Step 1: gather local counts
+  // ================================================================
+  uint32_t local_count = dto_vec_.size();
   std::vector<uint32_t> recv_counts(mpienv_.nprocs);
   std::vector<bool> ischunk(mpienv_.nprocs);
-  int32_t CHUNK = INT_MAX;
-  MPI_Allgather(&local_count, 1, MPI_UINT32_T, recv_counts.data(), 1, MPI_UINT32_T, MPI_COMM_WORLD);
 
-  // Step 2: compute displacements
+  int32_t CHUNK = INT_MAX;
+
+  MPI_Allgather(&local_count, 1, MPI_UINT32_T,
+                recv_counts.data(), 1, MPI_UINT32_T,
+                MPI_COMM_WORLD);
+
+  // ================================================================
+  // Step 2: compute prefix displacements
+  // ================================================================
   std::vector<uint32_t> displs(mpienv_.nprocs, 0);
   uint32_t total_count = 0;
   for (int i = 0; i < mpienv_.nprocs; ++i) {
     displs[i] = total_count;
     total_count += recv_counts[i];
-    if (recv_counts[i] > INT_MAX) ischunk[i] = true; 
+    if (recv_counts[i] > INT_MAX) ischunk[i] = true;
   }
 
-
-  // Step 3: resize root vertices_ to hold all gathered data
+  // ================================================================
+  // Step 3: gather all dto to rank 0
+  // ================================================================
   if (mpienv_.rank == 0) {
-    vertices_.resize(total_count);
+    dto_vec_.resize(total_count);
+
     for (uint32_t i = 1; i < mpienv_.nprocs; ++i) {
       if (ischunk[i]) {
         for (uint32_t offset = 0; offset < recv_counts[i]; offset += CHUNK) {
-          int32_t chunk_size = std::min(CHUNK, static_cast<int32_t>(recv_counts[i] - offset));
-          MPI_Recv(vertices_.data() + displs[i] + offset, chunk_size, MPI_vertices, i, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+          int32_t chunk_size = std::min(CHUNK,
+                                        static_cast<int32_t>(recv_counts[i] - offset));
+          MPI_Recv(dto_vec_.data() + displs[i] + offset,
+                   chunk_size, MPI_dto, i, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         }
       } else {
-        MPI_Recv(vertices_.data() + displs[i], recv_counts[i], MPI_vertices, i, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(dto_vec_.data() + displs[i],
+                 recv_counts[i], MPI_dto, i, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
       }
-      
     }
   } else {
-    // 非0号进程发送数据
     if (ischunk[mpienv_.rank]) {
       for (uint32_t offset = 0; offset < local_count; offset += CHUNK) {
-        int32_t chunk_size = std::min(CHUNK, static_cast<int32_t>(local_count - offset));
-        MPI_Send(vertices_.data() + offset, chunk_size, MPI_vertices, 0, 1, MPI_COMM_WORLD);
+        int32_t chunk_size = std::min(CHUNK,
+                                      static_cast<int32_t>(local_count - offset));
+        MPI_Send(dto_vec_.data() + offset,
+                 chunk_size, MPI_dto, 0, 1, MPI_COMM_WORLD);
       }
     } else {
-      MPI_Send(vertices_.data(), local_count, MPI_vertices, 0, 1, MPI_COMM_WORLD);
+      MPI_Send(dto_vec_.data(), local_count, MPI_dto, 0, 1, MPI_COMM_WORLD);
     }
-    vertices_.resize(total_count);
+
+    dto_vec_.resize(total_count);
   }
 
+  // ================================================================
+  // Step 4: broadcast the complete DTO array to all ranks
+  // ================================================================
   for (uint32_t offset = 0; offset < total_count; offset += CHUNK) {
-    int32_t chunk_size = std::min(CHUNK, static_cast<int32_t>(total_count - offset));
-    MPI_Bcast(vertices_.data() + offset, chunk_size, MPI_vertices, 0, MPI_COMM_WORLD);
+    int32_t chunk_size = std::min(CHUNK,
+                                  static_cast<int32_t>(total_count - offset));
+    MPI_Bcast(dto_vec_.data() + offset,
+              chunk_size, MPI_dto, 0, MPI_COMM_WORLD);
   }
 
-  MPI_Type_free(&MPI_vertices);
+  MPI_Type_free(&MPI_dto);
+
+  // ================================================================
+  // Step 5: decode DTO back to vertices_
+  // ================================================================
+  DTO_decode();  // 你写的反向构造函数版本
 }
 
-void UnitigGraph::RootBroadcast() {
-  MPI_Datatype MPI_vertices;
 
-  const int kFieldCount = 7;
-  int block_lengths[kFieldCount] = {3, 1, 1, 1, 1, 1, 1};
-  MPI_Aint displacements[kFieldCount];
-  displacements[0] = 0;
-  displacements[1] = 24;
-  displacements[2] = 32;
-  displacements[3] = 36;
-  displacements[4] = 37;
-  displacements[5] = 38;
-  displacements[6] = 39;
+// void UnitigGraph::RootBroadcast() {
+//   MPI_Datatype MPI_vertices;
 
-  MPI_Datatype types[kFieldCount] = {
-    MPI_UINT64_T,
-    MPI_UINT64_T,
-    MPI_UINT32_T,
-    MPI_C_BOOL,
-    MPI_C_BOOL,
-    MPI_C_BOOL,
-    MPI_UINT8_T,
-  };
+//   const int kFieldCount = 7;
+//   int block_lengths[kFieldCount] = {3, 1, 1, 1, 1, 1, 1};
+//   MPI_Aint displacements[kFieldCount];
+//   displacements[0] = 0;
+//   displacements[1] = 24;
+//   displacements[2] = 32;
+//   displacements[3] = 36;
+//   displacements[4] = 37;
+//   displacements[5] = 38;
+//   displacements[6] = 39;
 
-  MPI_Type_create_struct(kFieldCount, block_lengths, displacements, types, &MPI_vertices);
-  MPI_Type_commit(&MPI_vertices);
+//   MPI_Datatype types[kFieldCount] = {
+//     MPI_UINT64_T,
+//     MPI_UINT64_T,
+//     MPI_UINT32_T,
+//     MPI_C_BOOL,
+//     MPI_C_BOOL,
+//     MPI_C_BOOL,
+//     MPI_UINT8_T,
+//   };
 
-  int32_t CHUNK = INT_MAX;
-  uint32_t total_count;
-  if (mpienv_.rank == 0) {
-    total_count = vertices_.size();
-  }
+//   MPI_Type_create_struct(kFieldCount, block_lengths, displacements, types, &MPI_vertices);
+//   MPI_Type_commit(&MPI_vertices);
+
+//   int32_t CHUNK = INT_MAX;
+//   uint32_t total_count;
+//   if (mpienv_.rank == 0) {
+//     total_count = vertices_.size();
+//   }
   
-  // 广播 total_count
-  MPI_Bcast(&total_count, 1, MPI_UINT32_T, 0, MPI_COMM_WORLD);
+//   // 广播 total_count
+//   MPI_Bcast(&total_count, 1, MPI_UINT32_T, 0, MPI_COMM_WORLD);
 
-  // 非 0 号进程根据接收到的 count 进行 resize
-  if (mpienv_.rank != 0) {
-    vertices_.resize(total_count);
-  }
+//   // 非 0 号进程根据接收到的 count 进行 resize
+//   if (mpienv_.rank != 0) {
+//     vertices_.resize(total_count);
+//   }
 
-  for (uint32_t offset = 0; offset < total_count; offset += CHUNK) {
-    int32_t chunk_size = std::min(CHUNK, static_cast<int32_t>(total_count - offset));
-    MPI_Bcast(vertices_.data() + offset, chunk_size, MPI_vertices, 0, MPI_COMM_WORLD);
-  }
+//   for (uint32_t offset = 0; offset < total_count; offset += CHUNK) {
+//     int32_t chunk_size = std::min(CHUNK, static_cast<int32_t>(total_count - offset));
+//     MPI_Bcast(vertices_.data() + offset, chunk_size, MPI_vertices, 0, MPI_COMM_WORLD);
+//   }
 
-  MPI_Type_free(&MPI_vertices);
-}
+//   MPI_Type_free(&MPI_vertices);
+// }
 
 void UnitigGraph::show_info(int rank) {
   std::string filename = std::to_string(rank) + "_output.txt"; // 文件名

@@ -27,7 +27,11 @@ class SDBG {
     LoadSdbgRawContent(&content_, dbg_name, num_thread);
 
     // if (mpienv.rank == 0) {
-    //   content_.w.debug_print();
+    //   // content_.w.debug_print();
+    //   std::cout << "CompactVector underlying words (" << content_.small_mul.size() << " words):\n";
+    //   for (size_t i = 0; i < content_.small_mul.size(); ++i) {
+    //     std::cout << "  [" << i << "] = 0x" << std::hex << content_.small_mul[i] << std::dec << "\n";
+    //   }
     // }
     // MPI_Barrier(MPI_COMM_WORLD); // Barrier before graph cleaning
     // exit(0);

@@ -37,11 +37,11 @@ class UnitigGraphVertex {
     uint64_t end : 48;
   }__attribute__((packed));
   StrandInfo strand_info[2];
-  uint64_t total_depth;
   uint32_t length;
-  bool is_looped;
-  bool is_palindrome;
-  bool is_changed;
+  uint64_t total_depth : 52;
+  bool is_looped : 1;
+  bool is_palindrome : 1;
+  bool is_changed : 1;
   // status that can be modified by adapter during traversal and must be atomic
   AtomicWrapper<uint8_t> flag;  // bit 0-4: any flag; bit 5: marked as to
                                 // delete; bit 6 & 7: marked as to disconnect

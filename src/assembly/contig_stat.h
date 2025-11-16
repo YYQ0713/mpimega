@@ -99,7 +99,7 @@ inline ContigStat CalcAndPrintStat(UnitigGraph &graph, bool print = true,
 //   return stat;
 // }
 
-inline ContigStat CalcAndPrintStatMPI(UnitigGraph &graph, MPIEnviroment &mpienv, bool print = true,
+inline ContigStat CalcAndPrintStatMPI(UnitigGraph &graph, MPIEnviroment &mpienv, int num_threads, bool print = true,
                                    bool changed_only = false) {
   uint64_t n_isolated = 0, n_looped = 0;
   Histgram<uint64_t> hist;
