@@ -314,7 +314,7 @@ int main_read2sdbg(int argc, char **argv, MPIEnviroment &mpienv) {
     }
   }
 
-  // MPI_Barrier(MPI_COMM_WORLD);
+  MPI_Barrier(MPI_COMM_WORLD);
 
   {
     // stage 2

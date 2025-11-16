@@ -557,13 +557,13 @@ void Read2SdbgS1::Lv2Postprocess(int64_t from, int64_t to, int thread,
 void Read2SdbgS1::Lv0Postprocess() {
   edge_counter_.addlocal();
 
-  // if (mpienv_.rank == 0) {
-  //   MPI_CHECK(MPI_Reduce(MPI_IN_PLACE, edge_counter_.local_counter_sum_.data(),
-  //   edge_counter_.local_counter_sum_.size(), MPI_INT64_T, MPI_SUM, 0, MPI_COMM_WORLD));
-  // } else {
-  //   MPI_CHECK(MPI_Reduce(edge_counter_.local_counter_sum_.data(), NULL,
-  //   edge_counter_.local_counter_sum_.size(), MPI_INT64_T, MPI_SUM, 0, MPI_COMM_WORLD));
-  // }
+  if (mpienv_.rank == 0) {
+    MPI_CHECK(MPI_Reduce(MPI_IN_PLACE, edge_counter_.local_counter_sum_.data(),
+    edge_counter_.local_counter_sum_.size(), MPI_INT64_T, MPI_SUM, 0, MPI_COMM_WORLD));
+  } else {
+    MPI_CHECK(MPI_Reduce(edge_counter_.local_counter_sum_.data(), NULL,
+    edge_counter_.local_counter_sum_.size(), MPI_INT64_T, MPI_SUM, 0, MPI_COMM_WORLD));
+  }
 
   if (mpienv_.rank == 0) {  
     // --- stat ---

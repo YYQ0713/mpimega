@@ -102,37 +102,37 @@ class EdgeReader : public BaseSequenceReader {
     unsigned files_rem = metadata_.num_files % mpienv_.nprocs;
 
     if (metadata_.is_sorted) {
-      // for (unsigned i = 0; i < mpienv_.nprocs; i++) {
-      //   for (unsigned j = 0; j < t; j++) {
-      //     in_streams_.emplace_back(
-      //         new std::ifstream(file_prefix_ + ".rank." + std::to_string(i) + ".edges." + std::to_string(j),
-      //                           std::ifstream::binary | std::ifstream::in));
-      //   }
-      // }
-      for (unsigned i = 0; i < metadata_.num_files; ++i) {
-        in_streams_.emplace_back(
-            new std::ifstream(file_prefix_ + ".rank.0.edges." + std::to_string(i),
-                              std::ifstream::binary | std::ifstream::in));
+      for (unsigned i = 0; i < mpienv_.nprocs; i++) {
+        for (unsigned j = 0; j < t; j++) {
+          in_streams_.emplace_back(
+              new std::ifstream(file_prefix_ + ".rank." + std::to_string(i) + ".edges." + std::to_string(j),
+                                std::ifstream::binary | std::ifstream::in));
+        }
       }
+      // for (unsigned i = 0; i < metadata_.num_files; ++i) {
+      //   in_streams_.emplace_back(
+      //       new std::ifstream(file_prefix_ + ".rank.0.edges." + std::to_string(i),
+      //                         std::ifstream::binary | std::ifstream::in));
+      // }
       // for (unsigned i = 0; i < metadata_.num_files; ++i) {
       //   in_streams_.emplace_back(
       //       new std::ifstream(file_prefix_ + ".edges." + std::to_string(i),
       //                         std::ifstream::binary | std::ifstream::in));
       // }
     } else {
-      // std::string filename = file_prefix_ + ".rank.0.edges.0";
-      // int ret = MPI_File_open(MPI_COMM_WORLD, filename.c_str(), MPI_MODE_RDONLY, MPI_INFO_NULL, &mpi_file_);
-      // mpi_file_opened_ = true;
-      // for (unsigned i = 0; i < metadata_.num_files; ++i) {
-      // in_streams_.emplace_back(
-      //     new std::ifstream(file_prefix_ + ".rank." + std::to_string(i) + ".edges.0",
-      //                       std::ifstream::binary | std::ifstream::in));
-      // }
+      std::string filename = file_prefix_ + ".rank.0.edges.0";
+      int ret = MPI_File_open(MPI_COMM_WORLD, filename.c_str(), MPI_MODE_RDONLY, MPI_INFO_NULL, &mpi_file_);
+      mpi_file_opened_ = true;
       for (unsigned i = 0; i < metadata_.num_files; ++i) {
       in_streams_.emplace_back(
-          new std::ifstream(file_prefix_ + ".rank.0.edges.0",
+          new std::ifstream(file_prefix_ + ".rank." + std::to_string(i) + ".edges.0",
                             std::ifstream::binary | std::ifstream::in));
       }
+      // for (unsigned i = 0; i < metadata_.num_files; ++i) {
+      // in_streams_.emplace_back(
+      //     new std::ifstream(file_prefix_ + ".rank.0.edges.0",
+      //                       std::ifstream::binary | std::ifstream::in));
+      // }
     }
     
     cur_cnt_ = 0;
@@ -140,8 +140,8 @@ class EdgeReader : public BaseSequenceReader {
     cur_bucket_ = -1;
 
     if (!metadata_.is_sorted) {
-      // cur_reader_.reset_mpi(in_streams_[0].get(), mpi_file_);
-      cur_reader_.reset(in_streams_[0].get());
+      cur_reader_.reset_mpi(in_streams_[0].get(), mpi_file_);
+      // cur_reader_.reset(in_streams_[0].get());
     }
 
     is_opened_ = true;
@@ -192,8 +192,8 @@ class EdgeReader : public BaseSequenceReader {
     }
 
     ++cur_cnt_;
-    // auto n_read = cur_reader_.read_mpi(buffer_.data(), metadata_.words_per_edge);
-    auto n_read = cur_reader_.read(buffer_.data(), metadata_.words_per_edge);
+    auto n_read = cur_reader_.read_mpi(buffer_.data(), metadata_.words_per_edge);
+    // auto n_read = cur_reader_.read(buffer_.data(), metadata_.words_per_edge);
     assert(n_read == metadata_.words_per_edge * sizeof(uint32_t));
     (void)n_read;
     return buffer_.data();
