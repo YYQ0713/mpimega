@@ -16,7 +16,6 @@ class KmerCollector {
  public:
   using kmer_type = KmerType;
   using kmer_plus = KmerPlus<KmerType, mul_t>;
-  // using kmer_plus = KmerPlus<KmerType, bool>;
   using hash_set = phmap::parallel_flat_hash_set<
       kmer_plus, KmerHash,
       std::equal_to<kmer_plus>,
@@ -30,14 +29,19 @@ class KmerCollector {
     words_per_kmer_ = DivCeiling(k_ * 2 + kBitsPerMul, 32);
     buffer_.resize(words_per_kmer_);
 
-    // writer_.SetFilePrefix(out_prefix);
-    // writer_.SetUnordered();
-    // writer_.SetKmerSize(k_ - 1);
-    // writer_.InitFiles(mpienv_);
+    writer_.SetFilePrefix(out_prefix);
+    writer_.SetUnordered();
+    writer_.SetKmerSize(k_ - 1);
+    writer_.InitFilesUnordered(mpienv_);
   }
 
   void Insert(const KmerType &kmer, mul_t mul) {
     collection_.insert({kmer, mul});
+  }
+
+  void final_process() {
+    writer_.allreduce();
+    writer_.FinalizeUnorder(mpienv_);
   }
 
   // void Insert(const KmerType &kmer, mul_t mul) {
@@ -50,6 +54,12 @@ class KmerCollector {
   // }
 
   const hash_set &collection() const { return collection_; }
+  void FlushToFile() {
+    for (const auto &item : collection_) {
+      WriteToFile(item.kmer, item.aux);
+    }
+  }
+
   void FlushToFile(MPIEdgeWriter<KmerType> &mpi_edgewiriter, int64_t &num_iterative_edges) {
     // for (const auto &item : collection_) {
     //   mpi_edgewiriter.WriteToBuf(item.kmer, item.aux);
@@ -78,33 +88,33 @@ class KmerCollector {
   }
 
  private:
-  // void WriteToFile(const KmerType &kmer, mul_t mul) {
-  //   std::fill(buffer_.begin(), buffer_.end(), 0);
+  void WriteToFile(const KmerType &kmer, mul_t mul) {
+    std::fill(buffer_.begin(), buffer_.end(), 0);
 
-  //   auto ptr = buffer_.begin();
-  //   uint32_t w = 0;
+    auto ptr = buffer_.begin();
+    uint32_t w = 0;
 
-  //   for (unsigned j = 0; j < k_; ++j) {
-  //     w = (w << 2) | kmer.GetBase(k_ - 1 - j);
-  //     if (j % 16 == 15) {
-  //       *ptr = w;
-  //       w = 0;
-  //       ++ptr;
-  //     }
-  //   }
+    for (unsigned j = 0; j < k_; ++j) {
+      w = (w << 2) | kmer.GetBase(k_ - 1 - j);
+      if (j % 16 == 15) {
+        *ptr = w;
+        w = 0;
+        ++ptr;
+      }
+    }
 
-  //   assert(ptr - buffer_.begin() < words_per_kmer_);
-  //   *ptr = (w << last_shift_);
-  //   assert((buffer_.back() & kMaxMul) == 0);
-  //   buffer_.back() |= mul;
-  //   //writer_.WriteUnordered(buffer_.data());
-  // }
+    assert(ptr - buffer_.begin() < words_per_kmer_);
+    *ptr = (w << last_shift_);
+    assert((buffer_.back() & kMaxMul) == 0);
+    buffer_.back() |= mul;
+    writer_.WriteUnordered(buffer_.data());
+  }
 
  private:
   unsigned k_;
   std::string output_prefix_;
   hash_set collection_;
-  //EdgeWriter writer_;
+  EdgeWriter writer_;
   unsigned last_shift_;
   unsigned words_per_kmer_;
   std::vector<uint32_t> buffer_;

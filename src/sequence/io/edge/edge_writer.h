@@ -57,6 +57,13 @@ class EdgeWriter {
     metadata_.num_edges = 0;
   }
 
+  void SetUnordered(int num_files) {
+    metadata_.buckets.clear();
+    metadata_.is_sorted = false;
+    metadata_.num_files = num_files;
+    metadata_.num_edges = 0;
+  }
+
   void InitFiles(MPIEnviroment& mpienv) {
     assert(!is_opened_);
     n_edges_at_thread_.resize(metadata_.num_files, 0);
@@ -64,6 +71,19 @@ class EdgeWriter {
     for (unsigned i = 0; i < metadata_.num_files; ++i) {
       files_.emplace_back(new std::ofstream(
           (file_prefix_ + ".rank." + std::to_string(mpienv.rank) + ".edges." + std::to_string(i)).c_str(),
+          std::ofstream::binary | std::ofstream::out));
+    }
+
+    is_opened_ = true;
+  }
+
+  void InitFilesUnordered(MPIEnviroment& mpienv) {
+    assert(!is_opened_);
+    n_edges_at_thread_.resize(metadata_.num_files, 0);
+
+    for (unsigned i = 0; i < metadata_.num_files; ++i) {
+      files_.emplace_back(new std::ofstream(
+          (file_prefix_ + ".rank.0.edges." + std::to_string(i)).c_str(),
           std::ofstream::binary | std::ofstream::out));
     }
 
@@ -123,6 +143,26 @@ class EdgeWriter {
       }
       is_opened_ = false;
     }
+  }
+
+  void FinalizeUnorder(MPIEnviroment &mpienv) {
+    if (is_opened_) {
+      for (auto &file : files_) {
+        file->close();
+      }
+
+      if (mpienv.rank == 0)
+      {
+        std::ofstream info_file(file_prefix_ + ".edges.info");
+        metadata_.UnorderSerialize(info_file, mpienv);
+        info_file.close();
+      }
+      is_opened_ = false;
+    }
+  }
+
+  void allreduce() {
+    MPI_Allreduce(MPI_IN_PLACE, &metadata_.num_edges, 1, MPI_INT64_T, MPI_SUM, MPI_COMM_WORLD);
   }
 
   void Finalize() {

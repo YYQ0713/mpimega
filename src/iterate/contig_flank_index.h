@@ -32,18 +32,21 @@ class ContigFlankIndex {
 
  public:
   ContigFlankIndex(unsigned k, unsigned step) : k_(k), step_(step) {}
-  ContigFlankIndex(unsigned k, unsigned step, unsigned num_threads) : k_(k), step_(step) { local_index_.resize(num_threads); } // use sub hashset
+  // ContigFlankIndex(unsigned k, unsigned step, unsigned num_threads) : k_(k), step_(step) { local_index_.resize(num_threads); } // use sub hashset
   size_t size() const { return hash_index_.size(); }
 
   void FeedBatchContigs(SeqPackage &seq_pkg, const std::vector<float> &mul) {
     SpinLock lock;
+    std::vector<SpinLock> slot_locks{kNumSlots};
+    slot_tables.resize(kNumSlots);
+    KmerHash hasher;
 
-// #pragma omp parallel
-//     {
-//       int tid = omp_get_thread_num();
-//       auto &lindex = local_index_[tid];
-  // #pragma omp for
-#pragma omp parallel for
+#pragma omp parallel
+    {
+      int tid = omp_get_thread_num();
+      // auto &lindex = local_index_[tid];
+  #pragma omp for
+// #pragma omp parallel for
       for (size_t i = 0; i < seq_pkg.seq_count(); ++i) {
         auto seq_view = seq_pkg.GetSeqView(i);
         size_t seq_len = seq_view.length();
@@ -72,69 +75,84 @@ class ContigFlankIndex {
             ext_seq |= uint64_t(get_jth_char(k_ + 1 + j)) << j * 2;
           }
   
+        // {
+        //   std::lock_guard<SpinLock> lk(lock);
+        //   auto res = hash_index_.emplace(kmer, FlankInfo{ext_seq, ext_len});
+        //   if (!res.second) {
+        //     auto old_len = res.first->aux.ext_len;
+        //     auto old_seq = res.first->aux.ext_seq;
+        //     if (old_len < ext_len ||
+        //         (old_len == ext_len && old_seq < ext_seq)) {
+        //       hash_index_.erase(res.first);
+        //       res = hash_index_.emplace(kmer, FlankInfo{ext_seq, ext_len});
+        //       assert(res.second);
+        //     }
+        //   }
+        // }
+
+        // auto res = lindex.emplace(kmer, FlankInfo{ext_seq, ext_len});
+        // if (!res.second) {
+        //   auto old_len = res.first->aux.ext_len;
+        //   auto old_seq = res.first->aux.ext_seq;
+        //   if (old_len < ext_len ||
+        //       (old_len == ext_len && old_seq < ext_seq)) {
+        //     lindex.erase(res.first);
+        //     res = lindex.emplace(kmer, FlankInfo{ext_seq, ext_len});
+        //     assert(res.second);
+        //   }
+        // }
+
+          size_t h = hasher(kmer);
+          size_t slot = h & (kNumSlots - 1);
+
           {
-            std::lock_guard<SpinLock> lk(lock);
-            auto res = hash_index_.emplace(kmer, FlankInfo{ext_seq, ext_len});
+            std::lock_guard<SpinLock> lk(slot_locks[slot]);
+            auto &tbl = slot_tables[slot];
+            auto res = tbl.emplace(kmer, FlankInfo{ext_seq, ext_len});
             if (!res.second) {
               auto old_len = res.first->aux.ext_len;
               auto old_seq = res.first->aux.ext_seq;
               if (old_len < ext_len ||
                   (old_len == ext_len && old_seq < ext_seq)) {
-                hash_index_.erase(res.first);
-                res = hash_index_.emplace(kmer, FlankInfo{ext_seq, ext_len});
-                assert(res.second);
+                tbl.erase(res.first);
+                tbl.emplace(kmer, FlankInfo{ext_seq, ext_len});
               }
             }
           }
-
-          // auto res = lindex.emplace(kmer, FlankInfo{ext_seq, ext_len});
-          // if (!res.second) {
-          //   auto old_len = res.first->aux.ext_len;
-          //   auto old_seq = res.first->aux.ext_seq;
-          //   if (old_len < ext_len ||
-          //       (old_len == ext_len && old_seq < ext_seq)) {
-          //     lindex.erase(res.first);
-          //     res = lindex.emplace(kmer, FlankInfo{ext_seq, ext_len});
-          //     assert(res.second);
-          //   }
-          // }
 
           if (seq_len == k_ + 1) {
             break;
           }
         }
       }
-    // } // pragma
+    } // pragma
 
-    // size_t n_actual = 0;
-    // for (auto &lindex : local_index_)
-    //   n_actual += lindex.size();
+    size_t total = 0;
+    for (auto &tbl : slot_tables) total += tbl.size();
+    hash_index_.reserve(total);
 
-    // hash_index_.reserve(n_actual);
-    
-    //Merge sub local_index
-    // for (auto &lindex : local_index_) {
-    //   for (auto &item : lindex) {
-    //     auto res = hash_index_.emplace(item);
-    //     if (!res.second) {
-    //       auto old_len = res.first->aux.ext_len;
-    //       auto old_seq = res.first->aux.ext_seq;
-    //       if (old_len < item.aux.ext_len ||
-    //           (old_len == item.aux.ext_len && old_seq < item.aux.ext_seq)) {
-    //         hash_index_.erase(res.first);
-    //         res = hash_index_.emplace(item);
-    //         assert(res.second);
-    //       }
-    //     }
-    //   }
-    //   lindex.clear();
-    //   lindex.rehash(0);
-    // }
+    for (auto &tbl : slot_tables) {
+      for (auto &item : tbl) {
+        auto res = hash_index_.emplace(item);
+        if (!res.second) {
+          auto old_len = res.first->aux.ext_len;
+          auto old_seq = res.first->aux.ext_seq;
+
+          if (old_len < item.aux.ext_len ||
+              (old_len == item.aux.ext_len && old_seq < item.aux.ext_seq)) {
+            hash_index_.erase(res.first);
+            hash_index_.emplace(item);
+          }
+        }
+      }
+      tbl.clear();
+      tbl.rehash(0);
+    }
   }
 
-  template <class CollectorType, class WriterType>
+  template <class CollectorType>
   size_t FindNextKmersFromReads(const SeqPackage &seq_pkg,
-                                CollectorType *out, int rank, int nprocs, WriterType *mpiwiriter, int64_t *num_edges) const {
+                                CollectorType *out, int rank, int nprocs) const {
     std::vector<bool> kmer_exist;
     std::vector<float> kmer_mul;
     size_t num_aligned_reads = 0;
@@ -288,12 +306,13 @@ class ContigFlankIndex {
       // }
     }
 
-    *num_edges += num_iter_edges;
     return num_aligned_reads;
   }
  private:
   HashSet hash_index_;
-  std::vector<HashSet> local_index_;
+  // std::vector<HashSet> local_index_;
+  static const size_t kNumSlots = 64;
+  std::vector<HashSet> slot_tables{};
   unsigned k_{};
   unsigned step_{};
 };

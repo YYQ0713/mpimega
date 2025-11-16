@@ -96,9 +96,9 @@ class BufferedReader {
   size_t refill_mpi() {
     head_ = 0;
     MPI_Status status;
-    MPI_File_read_all(mpi_file_, big_buffer_.data(), big_buffer_size_, MPI_BYTE, &status);
+    MPI_File_read_all(mpi_file_, big_buffer_.data(), big_buffer_size_, MPI_CHAR, &status);
     int count;
-    MPI_Get_count(&status, MPI_BYTE, &count);
+    MPI_Get_count(&status, MPI_CHAR, &count);
     tail_ = (count == big_buffer_size_) ? big_buffer_size_ : static_cast<size_t>(count);
     
     return tail_;

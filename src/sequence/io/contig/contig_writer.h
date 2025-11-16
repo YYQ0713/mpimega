@@ -158,7 +158,7 @@ class MPIContigWriter {
  private:
   std::string file_name_;
   std::FILE *file_;
-  int rank_;
+  int rank_{-1};
   std::atomic<int64_t> n_contigs_{0};
   std::atomic<int64_t> n_bases_{0};
   MPI_File mpi_file;                       // MPI 文件句柄
