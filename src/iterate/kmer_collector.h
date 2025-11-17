@@ -35,6 +35,19 @@ class KmerCollector {
     writer_.InitFilesUnordered(mpienv_);
   }
 
+  KmerCollector(unsigned k, const std::string &out_prefix)
+      : k_(k), output_prefix_(out_prefix) {
+    last_shift_ = k_ % 16;
+    last_shift_ = (last_shift_ == 0 ? 0 : 16 - last_shift_) * 2;
+    words_per_kmer_ = DivCeiling(k_ * 2 + kBitsPerMul, 32);
+    buffer_.resize(words_per_kmer_);
+
+    writer_.SetFilePrefix(out_prefix);
+    writer_.SetUnordered();
+    writer_.SetKmerSize(k_ - 1);
+    writer_.InitFiles();
+  }
+
   void Insert(const KmerType &kmer, mul_t mul) {
     collection_.insert({kmer, mul});
   }
@@ -85,6 +98,11 @@ class KmerCollector {
     if (count > 0) {
         mpi_edgewiriter.MPIFileWrite();
     }
+  }
+
+  // new
+  void Finalize() {
+    writer_.FinalizeUnorder(mpienv_);
   }
 
  private:

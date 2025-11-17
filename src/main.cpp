@@ -1085,8 +1085,9 @@ int main(int argc, char **argv) {
         if (!opt.no_local) {
             local_assemble(opt, cur_k, next_k);
         }
-        
-        iterate(opt, cur_k, k_step);
+        if (opt.mpienv_.rank == 0) {
+            iterate(opt, cur_k, k_step);
+        }
         MPI_Barrier(MPI_COMM_WORLD);
         // if (opt.mpienv_.rank == 0) {
             build_graph(opt, next_k, cur_k);

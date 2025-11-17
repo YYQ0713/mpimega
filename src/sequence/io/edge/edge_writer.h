@@ -77,6 +77,19 @@ class EdgeWriter {
     is_opened_ = true;
   }
 
+  void InitFiles() {
+    assert(!is_opened_);
+    n_edges_at_thread_.resize(metadata_.num_files, 0);
+
+    for (unsigned i = 0; i < metadata_.num_files; ++i) {
+      files_.emplace_back(new std::ofstream(
+          (file_prefix_ + ".rank.0.edges." + std::to_string(i)).c_str(),
+          std::ofstream::binary | std::ofstream::out));
+    }
+
+    is_opened_ = true;
+  }
+
   void InitFilesUnordered(MPIEnviroment& mpienv) {
     assert(!is_opened_);
     n_edges_at_thread_.resize(metadata_.num_files, 0);

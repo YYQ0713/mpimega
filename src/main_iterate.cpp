@@ -215,6 +215,60 @@ template <class KmerType, class IndexType>
 static bool ReadReadsAndProcessKernel(const IterOption &opt,
                                       const IndexType &index,
                                       MPIEnviroment &mpienv) {
+  // if (KmerType::max_size() < static_cast<unsigned>(opt.kmer_k + opt.step + 1)) {
+  //   return false;
+  // }
+  // xinfo("Selected kmer type size for next k: {}\n", sizeof(KmerType));
+  // BinaryReader binary_reader(opt.read_file);
+  // AsyncSequenceReader reader(&binary_reader);
+  // KmerCollector<KmerType> collector(opt.kmer_k + opt.step + 1,
+  //                                   opt.output_prefix,
+  //                                   mpienv);
+  // int64_t num_aligned_reads = 0;
+  // int64_t num_total_reads = 0;
+  // int64_t num_iterative_edges = 0;
+  // MPIEdgeWriter<KmerType> mpi_edgewiriter(opt.kmer_k + opt.step + 1, opt.output_prefix, mpienv);
+
+  // //Bloom bloom(10000000000, 0.1);
+
+  // while (true) {
+  //   const auto &read_pkg = reader.Next();
+  //   if (read_pkg.seq_count() == 0) {
+  //     break;
+  //   }
+  //   // num_aligned_reads += index.FindNextKmersFromReads(read_pkg, &collector, mpienv.rank, mpienv.nprocs, &mpi_edgewiriter, &num_iterative_edges, &bloom);
+  //   num_aligned_reads += index.FindNextKmersFromReads(read_pkg, &collector, mpienv.rank, mpienv.nprocs);
+  //   num_total_reads += read_pkg.seq_count();
+  //   xinfo("Processed: {}, aligned: {}. Iterative edges: {}\n", num_total_reads,
+  //          num_aligned_reads, collector.collection().size());
+  //   //xinfo("Processed: {}, aligned: {}.\n", num_total_reads, num_aligned_reads);
+  // }
+  
+  // collector.FlushToFile(mpi_edgewiriter, num_iterative_edges);
+  // num_iterative_edges = collector.collection().size();
+  // MPI_Allreduce(MPI_IN_PLACE, &num_iterative_edges, 1, MPI_INT64_T, MPI_SUM, MPI_COMM_WORLD);
+  // xinfo("Total: {}, aligned: {}. Iterative edges: {}\n", num_total_reads, num_aligned_reads, num_iterative_edges);
+  // // collector.FlushToFile();
+
+  // // for (int r = 0; r < mpienv.nprocs; ++r) {
+  // //     if (mpienv.rank == r) {
+  // //         collector.FlushToFile();
+  // //     }
+  // //     MPI_Barrier(MPI_COMM_WORLD);
+  // // }
+  // // collector.final_process();
+
+  // mpi_edgewiriter.MPIFileWrite();
+  // mpi_edgewiriter.allreduce();
+  // mpi_edgewiriter.Finalize(mpienv);
+  // MPI_Barrier(MPI_COMM_WORLD);
+
+  // size_t vmrss_kb = getCurrentRSS_kb();
+  // xinfo("End of iter currentRSS: {} KB\n", vmrss_kb);
+  // return true;
+
+  //------------------------------------------------------//
+
   if (KmerType::max_size() < static_cast<unsigned>(opt.kmer_k + opt.step + 1)) {
     return false;
   }
@@ -222,48 +276,24 @@ static bool ReadReadsAndProcessKernel(const IterOption &opt,
   BinaryReader binary_reader(opt.read_file);
   AsyncSequenceReader reader(&binary_reader);
   KmerCollector<KmerType> collector(opt.kmer_k + opt.step + 1,
-                                    opt.output_prefix,
-                                    mpienv);
+                                    opt.output_prefix);
   int64_t num_aligned_reads = 0;
   int64_t num_total_reads = 0;
-  int64_t num_iterative_edges = 0;
-  MPIEdgeWriter<KmerType> mpi_edgewiriter(opt.kmer_k + opt.step + 1, opt.output_prefix, mpienv);
-
-  //Bloom bloom(10000000000, 0.1);
 
   while (true) {
     const auto &read_pkg = reader.Next();
     if (read_pkg.seq_count() == 0) {
       break;
     }
-    // num_aligned_reads += index.FindNextKmersFromReads(read_pkg, &collector, mpienv.rank, mpienv.nprocs, &mpi_edgewiriter, &num_iterative_edges, &bloom);
-    num_aligned_reads += index.FindNextKmersFromReads(read_pkg, &collector, mpienv.rank, mpienv.nprocs);
+    num_aligned_reads += index.FindNextKmersFromReads(read_pkg, &collector);
     num_total_reads += read_pkg.seq_count();
     xinfo("Processed: {}, aligned: {}. Iterative edges: {}\n", num_total_reads,
-           num_aligned_reads, collector.collection().size());
-    //xinfo("Processed: {}, aligned: {}.\n", num_total_reads, num_aligned_reads);
+          num_aligned_reads, collector.collection().size());
   }
-  
-  collector.FlushToFile(mpi_edgewiriter, num_iterative_edges);
-  num_iterative_edges = collector.collection().size();
-  MPI_Allreduce(MPI_IN_PLACE, &num_iterative_edges, 1, MPI_INT64_T, MPI_SUM, MPI_COMM_WORLD);
-  xinfo("Total: {}, aligned: {}. Iterative edges: {}\n", num_total_reads, num_aligned_reads, num_iterative_edges);
-  // collector.FlushToFile();
-
-  // for (int r = 0; r < mpienv.nprocs; ++r) {
-  //     if (mpienv.rank == r) {
-  //         collector.FlushToFile();
-  //     }
-  //     MPI_Barrier(MPI_COMM_WORLD);
-  // }
-  // collector.final_process();
-  mpi_edgewiriter.MPIFileWrite();
-  mpi_edgewiriter.allreduce();
-  mpi_edgewiriter.Finalize(mpienv);
-  MPI_Barrier(MPI_COMM_WORLD);
-
-  size_t vmrss_kb = getCurrentRSS_kb();
-  xinfo("End of iter currentRSS: {} KB\n", vmrss_kb);
+  collector.FlushToFile();
+  collector.Finalize(); // new
+  xinfo("Total: {}, aligned: {}. Iterative edges: {}\n", num_total_reads,
+        num_aligned_reads, collector.collection().size());
   return true;
 }
 
@@ -298,6 +328,7 @@ static void ReadContigsAndBuildIndex(const IterOption &opt,
     }
     xinfo("Read {} contigs\n", contig_pkg.seq_count());
     index->FeedBatchContigs(contig_pkg, mul);
+    // index->FeedBatchContigsSubindex(contig_pkg, mul);
     xinfo("Number of flank kmers: {}\n", index->size());
   }
 }
@@ -313,7 +344,6 @@ struct Runner : public BaseRunner {
   ~Runner() override = default;
   void Run(const IterOption &opt, MPIEnviroment &mpienv) override {
     xinfo("Selected kmer type size for k: {}\n", sizeof(KmerType));
-    // ContigFlankIndex<KmerType> index(opt.kmer_k, opt.step);
     ContigFlankIndex<KmerType> index(opt.kmer_k, opt.step);
     ReadContigsAndBuildIndex(opt, opt.contig_file, &index, mpienv);
     ReadContigsAndBuildIndex(opt, opt.bubble_file, &index, mpienv);
