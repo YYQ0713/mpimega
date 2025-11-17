@@ -218,7 +218,7 @@ class UnitigGraph {
   SDBG *sdbg_{};
   MPIEnviroment mpienv_;
   //std::deque<UnitigGraphVertex> vertices_;
-  std::vector<UnitigGraphVertex> vertices_;
+  std::deque<UnitigGraphVertex> vertices_;
   //kmlib::AtomicBitVector<uint8_t> vtx_del_flag_;
   //std::vector<UnitigGraphVertex> loop_vertices_;
   phmap::flat_hash_map<uint64_t, size_type> id_map_;

@@ -20,38 +20,20 @@ void SdbgWriter::InitFiles(MPIEnviroment &mpienv) {
     assert(files_[i]->is_open());
   }
   is_opened_ = true;
-
-  /*
-  for (size_t i = 0; i < num_threads_; ++i) {
-    std::string filename = file_prefix_ + ".rank." + std::to_string(mpienv.rank) + ".sdbg." + std::to_string(i);
-    MPI_File fh;
-    // 使用 MPI_File_open 打开文件，MPI_MODE_CREATE 创建文件，MPI_MODE_WRONLY 写模式
-    int rc = MPI_File_open(
-        MPI_COMM_SELF, // 每个进程独立操作自己的文件
-        filename.c_str(),
-        MPI_MODE_CREATE | MPI_MODE_WRONLY,
-        MPI_INFO_NULL,
-        &fh
-    );
-    assert(rc == MPI_SUCCESS); // 确保文件打开成功
-    files_.push_back(fh);
-  }
-  is_opened_ = true;
-  */
 }
 
-//void SdbgWriter::InitFiles() {
-//  cur_thread_offset_.resize(num_threads_, 0);
-//  bucket_rec_.resize(num_buckets_);
-//
-//  for (size_t i = 0; i < num_threads_; ++i) {
-//    files_.emplace_back(
-//        new std::ofstream((file_prefix_ + ".sdbg." + std::to_string(i)).c_str(),
-//                          std::ofstream::binary | std::ofstream::out));
-//    assert(files_[i]->is_open());
-//  }
-//  is_opened_ = true;
-//}
+void SdbgWriter::InitFiles() {
+ cur_thread_offset_.resize(num_threads_, 0);
+ bucket_rec_.resize(num_buckets_);
+
+ for (size_t i = 0; i < num_threads_; ++i) {
+   files_.emplace_back(
+       new std::ofstream((file_prefix_ + ".sdbg." + std::to_string(i)).c_str(),
+                         std::ofstream::binary | std::ofstream::out));
+   assert(files_[i]->is_open());
+ }
+ is_opened_ = true;
+}
 
 /*
 void SdbgWriter::Write(unsigned tid, uint32_t bucket_id, uint8_t w,

@@ -70,22 +70,22 @@ void HashMapper::LoadAndBuild(const std::string &contig_file, int32_t min_len,
   size_t sz = refseq_.seq_count();
   size_t n_kmers = 0;
 
-#pragma omp parallel for reduction(+ : n_kmers)
-  for (size_t i = 0; i < sz; ++i) {
-    n_kmers +=
-        (refseq_.GetSeqView(i).length() - seed_kmer_size + sparsity) / sparsity;
-  }
+// #pragma omp parallel for reduction(+ : n_kmers)
+//   for (size_t i = 0; i < sz; ++i) {
+//     n_kmers +=
+//         (refseq_.GetSeqView(i).length() - seed_kmer_size + sparsity) / sparsity;
+//   }
 
-  index_.reserve(n_kmers);
+//   index_.reserve(n_kmers);
   SpinLock mapper_lock;
   local_index_.resize(n_threads);
 
-  // #pragma omp parallel
-  // {
-    // int tid = omp_get_thread_num();
-    // auto &lindex = local_index_[tid];
-    // #pragma omp for
-#pragma omp parallel for
+  #pragma omp parallel
+  {
+    int tid = omp_get_thread_num();
+    auto &lindex = local_index_[tid];
+    #pragma omp for
+// #pragma omp parallel for
       for (size_t i = 0; i < sz; ++i) {
         TKmer key;
         auto contig_view = refseq_.GetSeqView(i);
@@ -96,36 +96,36 @@ void HashMapper::LoadAndBuild(const std::string &contig_file, int32_t min_len,
                           seed_kmer_size);
           auto kmer = key.unique_format(seed_kmer_size);
           auto offset = EncodeContigOffset(contig_view.id(), j, key != kmer);
-          std::lock_guard<SpinLock> lk(mapper_lock);
-          auto res = index_.emplace(kmer, offset);
-          if (!res.second) {
-            res.first->second |= 1ULL << 63;
-          }
-          // auto res = lindex.emplace(kmer, offset);
+          // std::lock_guard<SpinLock> lk(mapper_lock);
+          // auto res = index_.emplace(kmer, offset);
           // if (!res.second) {
           //   res.first->second |= 1ULL << 63;
           // }
+          auto res = lindex.emplace(kmer, offset);
+          if (!res.second) {
+            res.first->second |= 1ULL << 63;
+          }
         }
       }
-  // }// pragma
+  }// pragma
 
-  // size_t n_actual = 0;
-  // for (auto &lindex : local_index_)
-  //   n_actual += lindex.size();
+  size_t n_actual = 0;
+  for (auto &lindex : local_index_)
+    n_actual += lindex.size();
 
-  // index_.reserve(n_actual);
+  index_.reserve(n_actual);
   
-  //Merge sub local_index
-  // for (auto &lindex : local_index_) {
-  //   for (auto &kv : lindex) {
-  //     auto res = index_.emplace(kv.first, kv.second);
-  //     if (!res.second) {
-  //       res.first->second |= 1ULL << 63;
-  //     }
-  //   }
-  //   lindex.clear();
-  //   lindex.rehash(0);
-  // }
+  // Merge sub local_index
+  for (auto &lindex : local_index_) {
+    for (auto &kv : lindex) {
+      auto res = index_.emplace(kv.first, kv.second);
+      if (!res.second) {
+        res.first->second |= 1ULL << 63;
+      }
+    }
+    lindex.clear();
+    lindex.rehash(0);
+  }
 
   xinfo("Number of contigs: {}, index size: {}\n", refseq_.seq_count(),
         index_.size());

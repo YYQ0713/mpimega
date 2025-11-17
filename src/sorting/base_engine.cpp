@@ -485,7 +485,7 @@ void BaseSequenceSortingEngine::Lv1ComputeThreadBegin() {
   for (unsigned b = lv1_start_bucket_ + 1; b < lv1_end_bucket_; ++b) {
     thread_meta_[0].bucket_begin[b] = thread_meta_[0].bucket_begin[b - 1] +
                                       bucket_sizes_[b - 1];  // accumulate
-  }// t0 的每一个bucket begin都是一个真正bucket的起始
+  }
 
   // then for the remaining threads
   for (unsigned t = 1; t < n_threads_; ++t) {
@@ -496,20 +496,17 @@ void BaseSequenceSortingEngine::Lv1ComputeThreadBegin() {
       current_thread_begin[b] = prev_thread_begin[b] + prev_thread_sizes[b];
     }
   }
-}//其他的线程，依次负责处理真正bucket中属于自己的那一部分
+}
 
 void BaseSequenceSortingEngine::Lv0CalcBucketSizeLaunchMt() {
-  SimpleTimer lv1_timer;
-  lv1_timer.reset();
-  lv1_timer.start();
 #pragma omp parallel for
   for (unsigned t = 0; t < n_threads_; ++t) {
     auto &thread_meta = thread_meta_[t];
     Lv0CalcBucketSize(thread_meta.seq_from, thread_meta.seq_to,
                       &thread_meta.bucket_sizes);
   }
-  lv1_timer.stop();
   std::fill(bucket_sizes_.begin(), bucket_sizes_.end(), 0);
+
   for (unsigned t = 0; t < n_threads_; ++t) {
     for (unsigned b = 0; b < kNumBuckets; ++b) {
       bucket_sizes_[b] += thread_meta_[t].bucket_sizes[b];

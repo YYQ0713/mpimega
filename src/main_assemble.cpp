@@ -298,6 +298,7 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
   timer.elapsed());
 
   //CalcAndPrintStat(graph);
+  CalcAndPrintStatMPI(graph, mpienv);
   xinfo("sizeof(UnitigGraphVertex): {}\n", sizeof(UnitigGraphVertex));
 
   // set up bubble
@@ -441,8 +442,8 @@ int main_assemble(int argc, char **argv, MPIEnviroment &mpienv) {
         "removed: {}, time: {}\n",
         num_removed, n_bubbles, timer.elapsed());
 
-    CalcAndPrintStat(graph);
-    // CalcAndPrintStatMPI(graph, mpienv, opt.num_cpu_threads);
+    // CalcAndPrintStat(graph);
+    CalcAndPrintStatMPI(graph, mpienv, opt.num_cpu_threads);
     
     timer.reset();
     timer.start();

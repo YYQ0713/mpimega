@@ -256,7 +256,7 @@ static bool ReadReadsAndProcessKernel(const IterOption &opt,
   //     }
   //     MPI_Barrier(MPI_COMM_WORLD);
   // }
-  collector.final_process();
+  // collector.final_process();
   mpi_edgewiriter.MPIFileWrite();
   mpi_edgewiriter.allreduce();
   mpi_edgewiriter.Finalize(mpienv);
